@@ -1,0 +1,15 @@
+# netlify.toml
+# ─────────────────────────────────────
+# 프로젝트 루트에 이 파일을 두세요
+# ─────────────────────────────────────
+
+[build]
+  # HTML 파일이 있는 폴더 (루트에 있으면 "." 또는 비워두기)
+  publish = "."
+  
+  # Functions 폴더 위치
+  functions = "netlify/functions"
+
+[functions]
+  # Node.js 18 사용
+  node_bundler = "esbuild"

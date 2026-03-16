@@ -1,0 +1,1134 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
+<title>고시원 관리 시스템</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;background:#0d1117;color:#e2e8f0;font-family:'Apple SD Gothic Neo','Noto Sans KR',sans-serif;font-size:15px;-webkit-font-smoothing:antialiased}
+::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-track{background:#1a2332}::-webkit-scrollbar-thumb{background:#334155;border-radius:2px}
+input,select,textarea{-webkit-appearance:none;appearance:none;color:#e2e8f0}
+#mobHeader{display:none}
+@media(max-width:768px){
+  #sidebar{transform:translateX(-224px);transition:transform .28s cubic-bezier(.4,0,.2,1)}
+  #sidebar.open{transform:translateX(0)!important;box-shadow:8px 0 40px rgba(0,0,0,.7)}
+  #ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:98}
+  #ov.open{display:block}
+  #main{margin-left:0!important;padding:12px 12px 90px!important}
+  #mobHeader{display:flex!important;position:sticky;top:0;z-index:90;background:#111827;border-bottom:1px solid #1e2d3d;padding:12px 16px;align-items:center;gap:10}
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState}=React;
+
+/* ── 날짜 유틸 ── */
+const today=new Date();
+const fmt=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const addDays=(d,n)=>{const r=new Date(d);r.setDate(r.getDate()+n);return r;};
+const bmo=o=>{const d=new Date(today.getFullYear(),today.getMonth()+o,1);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;};
+const diffDays=(a,b)=>Math.round((new Date(a)-new Date(b))/(1000*60*60*24));
+
+/* ── 초기 데이터 ── */
+const IR=[
+  {id:101,floor:1,type:'single',size:'7평',status:'occupied',monthlyRent:400000},
+  {id:102,floor:1,type:'single',size:'7평',status:'occupied',monthlyRent:380000},
+  {id:103,floor:1,type:'double',size:'9평',status:'vacant',monthlyRent:500000},
+  {id:104,floor:1,type:'single',size:'7평',status:'reserved',monthlyRent:380000},
+  {id:105,floor:1,type:'single',size:'7평',status:'vacant',monthlyRent:380000},
+  {id:201,floor:2,type:'single',size:'7평',status:'occupied',monthlyRent:400000},
+  {id:202,floor:2,type:'double',size:'9평',status:'occupied',monthlyRent:520000},
+  {id:203,floor:2,type:'single',size:'7평',status:'occupied',monthlyRent:380000},
+  {id:204,floor:2,type:'single',size:'7평',status:'vacant',monthlyRent:380000},
+  {id:205,floor:2,type:'single',size:'7평',status:'occupied',monthlyRent:400000},
+  {id:301,floor:3,type:'single',size:'7평',status:'occupied',monthlyRent:400000},
+  {id:302,floor:3,type:'double',size:'9평',status:'occupied',monthlyRent:500000},
+  {id:303,floor:3,type:'single',size:'7평',status:'reserved',monthlyRent:380000},
+  {id:304,floor:3,type:'single',size:'7평',status:'vacant',monthlyRent:380000},
+  {id:305,floor:3,type:'single',size:'7평',status:'occupied',monthlyRent:380000},
+];
+
+const IT=[
+  {id:1,name:'김민준',phone:'010-1234-5678',roomId:101,moveIn:'2024-08-01',moveOut:'2025-08-01',payDay:5,deposit:300000,paid:true,paidDate:fmt(addDays(today,-2)),memo:'',contractFile:null,contractName:null,stayType:'월',dailyRate:0,reserveDate:null},
+  {id:2,name:'이서연',phone:'010-2345-6789',roomId:102,moveIn:'2024-10-15',moveOut:'2025-10-15',payDay:15,deposit:300000,paid:false,paidDate:null,memo:'조용한 분',contractFile:null,contractName:null,stayType:'월',dailyRate:0,reserveDate:null},
+  {id:3,name:'박지호',phone:'010-3456-7890',roomId:201,moveIn:'2025-01-01',moveOut:'2026-01-01',payDay:1,deposit:200000,paid:true,paidDate:fmt(today),memo:'',contractFile:null,contractName:null,stayType:'월',dailyRate:0,reserveDate:null},
+  {id:4,name:'최유나',phone:'010-4567-8901',roomId:202,moveIn:'2024-06-20',moveOut:'2025-06-20',payDay:20,deposit:400000,paid:false,paidDate:null,memo:'',contractFile:null,contractName:null,stayType:'월',dailyRate:0,reserveDate:null},
+  {id:5,name:'정승현',phone:'010-5678-9012',roomId:104,moveIn:fmt(addDays(today,5)),moveOut:null,payDay:10,deposit:300000,paid:false,paidDate:null,memo:'예약자',contractFile:null,contractName:null,stayType:'일',dailyRate:15000,reserveDate:fmt(addDays(today,5))},
+  {id:6,name:'한소희',phone:'010-6789-0123',roomId:203,moveIn:'2025-02-01',moveOut:'2026-02-01',payDay:8,deposit:300000,paid:true,paidDate:fmt(addDays(today,-1)),memo:'',contractFile:null,contractName:null,stayType:'월',dailyRate:0,reserveDate:null},
+  {id:7,name:'오준혁',phone:'010-7890-1234',roomId:205,moveIn:'2025-03-01',moveOut:'2026-03-01',payDay:parseInt(fmt(addDays(today,2)).split('-')[2]),deposit:300000,paid:false,paidDate:null,memo:'',contractFile:null,contractName:null,stayType:'월',dailyRate:0,reserveDate:null},
+  {id:8,name:'임채원',phone:'010-8901-2345',roomId:301,moveIn:'2024-12-01',moveOut:fmt(addDays(today,3)),payDay:parseInt(fmt(today).split('-')[2]),deposit:300000,paid:false,paidDate:null,memo:'',contractFile:null,contractName:null,stayType:'주',dailyRate:50000,reserveDate:null},
+  {id:9,name:'강나영',phone:'010-9012-3456',roomId:302,moveIn:'2025-01-15',moveOut:'2026-01-15',payDay:parseInt(fmt(addDays(today,-3)).split('-')[2]),deposit:400000,paid:false,paidDate:null,memo:'연체중',contractFile:null,contractName:null,stayType:'월',dailyRate:0,reserveDate:null},
+  {id:10,name:'신민서',phone:'010-0123-4567',roomId:303,moveIn:fmt(addDays(today,10)),moveOut:null,payDay:25,deposit:300000,paid:false,paidDate:null,memo:'예약자',contractFile:null,contractName:null,stayType:'일',dailyRate:13000,reserveDate:fmt(addDays(today,10))},
+  {id:11,name:'홍태양',phone:'010-1357-2468',roomId:305,moveIn:'2025-03-05',moveOut:fmt(addDays(today,28)),payDay:parseInt(fmt(addDays(today,3)).split('-')[2]),deposit:300000,paid:false,paidDate:null,memo:'',contractFile:null,contractName:null,stayType:'월',dailyRate:0,reserveDate:null},
+];
+
+const EXP_CATS=['수도세','전기세','가스비','인터넷','소모품','청소용품','수리비','인건비','보험료','기타'];
+const CC={수도세:'#3b82f6',전기세:'#f59e0b',가스비:'#f97316',인터넷:'#8b5cf6',소모품:'#06b6d4',청소용품:'#22c55e',수리비:'#ef4444',인건비:'#ec4899',보험료:'#64748b',기타:'#94a3b8'};
+
+const IE=[
+  {id:1,month:bmo(0),date:fmt(addDays(today,-2)),category:'수도세',amount:85000,memo:'3월 수도세'},
+  {id:2,month:bmo(0),date:fmt(addDays(today,-1)),category:'전기세',amount:142000,memo:'3월 전기세'},
+  {id:3,month:bmo(0),date:fmt(today),category:'소모품',amount:35000,memo:'화장지·비누'},
+  {id:4,month:bmo(0),date:fmt(today),category:'인터넷',amount:44000,memo:'KT 인터넷'},
+  {id:5,month:bmo(0),date:fmt(addDays(today,-3)),category:'청소용품',amount:28000,memo:'청소포 외'},
+  {id:6,month:bmo(-1),date:'',category:'수도세',amount:79000,memo:''},{id:7,month:bmo(-1),date:'',category:'전기세',amount:135000,memo:''},
+  {id:8,month:bmo(-1),date:'',category:'가스비',amount:92000,memo:''},{id:9,month:bmo(-1),date:'',category:'소모품',amount:41000,memo:''},
+  {id:10,month:bmo(-1),date:'',category:'인터넷',amount:44000,memo:''},{id:11,month:bmo(-1),date:'',category:'수리비',amount:150000,memo:'보일러'},
+  {id:12,month:bmo(-2),date:'',category:'수도세',amount:81000,memo:''},{id:13,month:bmo(-2),date:'',category:'전기세',amount:128000,memo:''},
+  {id:14,month:bmo(-2),date:'',category:'가스비',amount:110000,memo:''},{id:15,month:bmo(-2),date:'',category:'인터넷',amount:44000,memo:''},
+  {id:16,month:bmo(-2),date:'',category:'소모품',amount:32000,memo:''},{id:17,month:bmo(-2),date:'',category:'인건비',amount:200000,memo:'청소 알바'},
+  {id:18,month:bmo(-3),date:'',category:'수도세',amount:88000,memo:''},{id:19,month:bmo(-3),date:'',category:'전기세',amount:155000,memo:''},
+  {id:20,month:bmo(-3),date:'',category:'가스비',amount:165000,memo:'성수기'},{id:21,month:bmo(-3),date:'',category:'인터넷',amount:44000,memo:''},
+  {id:22,month:bmo(-3),date:'',category:'소모품',amount:55000,memo:''},{id:23,month:bmo(-3),date:'',category:'보험료',amount:80000,memo:'화재보험'},
+  {id:24,month:bmo(-4),date:'',category:'수도세',amount:76000,memo:''},{id:25,month:bmo(-4),date:'',category:'전기세',amount:148000,memo:''},
+  {id:26,month:bmo(-4),date:'',category:'가스비',amount:172000,memo:''},{id:27,month:bmo(-4),date:'',category:'인터넷',amount:44000,memo:''},
+  {id:28,month:bmo(-4),date:'',category:'기타',amount:35000,memo:''},
+  {id:29,month:bmo(-5),date:'',category:'수도세',amount:72000,memo:''},{id:30,month:bmo(-5),date:'',category:'전기세',amount:139000,memo:''},
+  {id:31,month:bmo(-5),date:'',category:'가스비',amount:158000,memo:''},{id:32,month:bmo(-5),date:'',category:'인터넷',amount:44000,memo:''},
+  {id:33,month:bmo(-5),date:'',category:'소모품',amount:29000,memo:''},
+];
+const MR={[bmo(0)]:3800000,[bmo(-1)]:4120000,[bmo(-2)]:3960000,[bmo(-3)]:4040000,[bmo(-4)]:3880000,[bmo(-5)]:3720000};
+const IN2=[
+  {id:1,title:'3월 방역 일정 안내',content:'3월 15일(토) 오전 10시 전체 방역 진행 예정입니다.',date:'2025-03-10',important:true},
+  {id:2,title:'공용 냉장고 정리 요청',content:'공용 냉장고 내 장기 보관 식품은 3월 20일 이후 폐기됩니다.',date:'2025-03-08',important:false},
+];
+const IM=[
+  {id:1,roomId:102,category:'전기',content:'콘센트 불량',reportDate:'2025-03-10',status:'처리중',priority:'보통'},
+  {id:2,roomId:205,category:'배관',content:'세면대 물 안 내려감',reportDate:'2025-03-09',status:'완료',priority:'낮음'},
+  {id:3,roomId:301,category:'기타',content:'방문 잠금장치 고장',reportDate:'2025-03-12',status:'대기',priority:'높음'},
+];
+const ISH=[
+  {id:1,name:'화장지 (30롤)',category:'소모품',qty:'1박스',done:false,urgent:true,memo:'재고 없음'},
+  {id:2,name:'주방세제',category:'청소용품',qty:'3개',done:false,urgent:false,memo:''},
+  {id:3,name:'형광등 교체 (201호)',category:'전기',qty:'2개',done:true,urgent:false,memo:''},
+  {id:4,name:'샴푸·린스',category:'소모품',qty:'6세트',done:false,urgent:true,memo:'3개 남음'},
+];
+
+/* ── 유틸 ── */
+const getPS=t=>{
+  const d=new Date().getDate()-t.payDay;
+  if(t.paid)return{label:'납부완료',color:'#22c55e',urgency:0};
+  if(d>0)return{label:`${d}일 연체`,color:'#ef4444',urgency:3};
+  if(d===0)return{label:'오늘 납부일',color:'#f97316',urgency:2};
+  if(d>=-3)return{label:`${-d}일 후 납부일`,color:'#eab308',urgency:1};
+  return{label:`${-d}일 후`,color:'#94a3b8',urgency:0};
+};
+const calcRent=(t,room)=>t.stayType==='월'?(room?.monthlyRent||0):(t.dailyRate||0);
+const rentLabel=(t,room)=>{
+  if(t.stayType==='월')return (room?.monthlyRent||0).toLocaleString()+'원/월';
+  if(t.stayType==='일')return (t.dailyRate||0).toLocaleString()+'원/일';
+  return (t.dailyRate||0).toLocaleString()+'원/주';
+};
+const fmtW=n=>(n||0).toLocaleString('ko-KR')+'원';
+const fmtM=n=>((n||0)/10000).toFixed(1)+'만';
+const todayStr=fmt(today);
+
+/* ────────────── 차트 컴포넌트 ────────────── */
+
+// 막대 차트: HTML div 기반 → 모든 화면에서 텍스트 정상
+function MiniBarChart({data, keys, colors, height=160}){
+  const allV = data.flatMap(d => keys.map(k => d[k]||0));
+  const maxV = Math.max(...allV, 1);
+  const [tip, setTip] = useState(null);
+
+  return (
+    <div style={{position:'relative', userSelect:'none'}}>
+      <div style={{display:'flex', alignItems:'flex-end', gap:6, height:height, paddingBottom:0}}>
+        {/* Y축 라벨 */}
+        <div style={{display:'flex', flexDirection:'column-reverse', justifyContent:'space-between', height:height-24, paddingBottom:4, flexShrink:0, width:36}}>
+          {[0, 0.5, 1].map((r,i) => (
+            <div key={i} style={{fontSize:10, color:'#64748b', textAlign:'right', lineHeight:1}}>{fmtM(maxV*r)}</div>
+          ))}
+        </div>
+        {/* 막대들 */}
+        <div style={{flex:1, display:'flex', alignItems:'flex-end', gap:4, height:'100%', position:'relative'}}>
+          {/* 그리드 라인 */}
+          {[0.5, 1].map((r,i) => (
+            <div key={i} style={{position:'absolute', left:0, right:0, bottom:`${r*(height-24)}px`, height:1, background:'#1e2d3d', pointerEvents:'none'}}/>
+          ))}
+          {data.map((d, di) => (
+            <div key={di} style={{flex:1, display:'flex', flexDirection:'column', height:'100%', minWidth:0}}>
+              {/* 막대 영역 */}
+              <div style={{flex:1, display:'flex', alignItems:'flex-end', gap:2, paddingBottom:0}}>
+                {keys.map((k, ki) => {
+                  const pct = ((d[k]||0) / maxV * 100);
+                  return (
+                    <div key={ki}
+                      style={{flex:1, height:`${pct}%`, background:colors[ki], borderRadius:'3px 3px 0 0', minHeight:1, transition:'opacity .15s', cursor:'pointer'}}
+                      onMouseEnter={() => setTip({di, k, val: d[k]||0, name: d.name})}
+                      onMouseLeave={() => setTip(null)}
+                    />
+                  );
+                })}
+              </div>
+              {/* X축 라벨 */}
+              <div style={{fontSize:11, color:'#64748b', textAlign:'center', paddingTop:4, height:20, flexShrink:0, overflow:'hidden', whiteSpace:'nowrap'}}>{d.name}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+      {/* 범례 */}
+      <div style={{display:'flex', gap:12, marginTop:6, paddingLeft:42}}>
+        {keys.map((k, i) => (
+          <div key={i} style={{display:'flex', alignItems:'center', gap:4, fontSize:11, color:'#94a3b8'}}>
+            <div style={{width:10, height:6, borderRadius:2, background:colors[i], flexShrink:0}}/>
+            {k}
+          </div>
+        ))}
+      </div>
+      {/* 툴팁 */}
+      {tip && (
+        <div style={{position:'absolute', top:4, right:4, background:'#1a2332', border:'1px solid #2d3f53', borderRadius:8, padding:'6px 10px', fontSize:12, pointerEvents:'none', zIndex:10}}>
+          <div style={{color:'#94a3b8', fontSize:10, marginBottom:2}}>{tip.name} · {tip.k}</div>
+          <div style={{color:'#f1f5f9', fontWeight:700}}>{fmtM(tip.val)}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// 라인 차트: SVG, 단 높이를 속성으로 고정하고 좌표계를 퍼센트로
+function MiniLineChart({data, dataKey, color='#22c55e', height=120}){
+  const vals = data.map(d => d[dataKey]||0);
+  const minV = Math.min(...vals), maxV = Math.max(...vals, 1), range = maxV - minV || 1;
+  // 퍼센트 좌표계 (0~100) 사용 → preserveAspectRatio none 없이도 자연스럽게 늘어남
+  const PL=8, PR=2, PT=8, PB=20; // % 단위
+  const cW = 100-PL-PR, cH = 100-PT-PB;
+  const pts = data.map((d,i) => ({
+    x: PL + (i/(data.length-1||1))*cW,
+    y: PT + cH - ((d[dataKey]-minV)/range)*cH,
+    v: d[dataKey], n: d.name,
+  }));
+  const path = pts.map((p,i) => `${i===0?'M':'L'}${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ');
+  const area = `${path} L${pts[pts.length-1].x},${PT+cH} L${pts[0].x},${PT+cH} Z`;
+  const [tip, setTip] = useState(null);
+
+  return (
+    <div style={{position:'relative'}}>
+      <svg
+        viewBox="0 0 100 100"
+        width="100%"
+        height={height}
+        preserveAspectRatio="none"
+        style={{display:'block', overflow:'visible'}}
+      >
+        <defs>
+          <linearGradient id={`lg_${dataKey}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.25"/>
+            <stop offset="100%" stopColor={color} stopOpacity="0"/>
+          </linearGradient>
+        </defs>
+        {/* 그리드 */}
+        {[0, 0.5, 1].map((r,i) => (
+          <line key={i} x1={PL} y1={PT+cH*r} x2={100-PR} y2={PT+cH*r} stroke="#1e2d3d" strokeWidth="0.3"/>
+        ))}
+        {/* 면적 + 라인 */}
+        <path d={area} fill={`url(#lg_${dataKey})`}/>
+        <path d={path} fill="none" stroke={color} strokeWidth="0.8" strokeLinejoin="round"/>
+        {/* 점 */}
+        {pts.map((p,i) => (
+          <circle key={i} cx={p.x} cy={p.y} r="1.2" fill={color}
+            style={{cursor:'pointer'}}
+            onMouseEnter={() => setTip(p)}
+            onMouseLeave={() => setTip(null)}
+          />
+        ))}
+      </svg>
+      {/* X축 라벨: HTML로 분리 → 텍스트 크기 항상 정상 */}
+      <div style={{display:'flex', paddingLeft:`${PL}%`, paddingRight:`${PR}%`, marginTop:-4}}>
+        {data.map((d,i) => (
+          <div key={i} style={{flex:1, textAlign:'center', fontSize:11, color:'#64748b'}}>{d.name}</div>
+        ))}
+      </div>
+      {/* Y축 라벨: HTML */}
+      <div style={{position:'absolute', left:0, top:0, height:height, display:'flex', flexDirection:'column', justifyContent:'space-between', paddingTop:`${PT}%`, paddingBottom:`${PB}%`, pointerEvents:'none'}}>
+        {[maxV, minV+range*0.5, minV].map((v,i) => (
+          <div key={i} style={{fontSize:10, color:'#475569'}}>{fmtM(v)}</div>
+        ))}
+      </div>
+      {/* 툴팁 */}
+      {tip && (
+        <div style={{position:'absolute', top:4, right:4, background:'#1a2332', border:'1px solid #2d3f53', borderRadius:8, padding:'5px 9px', fontSize:12, pointerEvents:'none'}}>
+          <div style={{color:'#94a3b8', fontSize:10}}>{tip.n}</div>
+          <div style={{color:color, fontWeight:700}}>{fmtM(tip.v)}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DonutChart({data}){
+  if(!data.length)return <div style={{textAlign:'center',color:'#64748b',padding:'20px 0',fontSize:13}}>데이터 없음</div>;
+  const total=data.reduce((s,d)=>s+d.value,0);
+  const cx=50,cy=46,r=28,ir=16;
+  let angle=-Math.PI/2;
+  const slices=data.map(d=>{const a=(d.value/total)*Math.PI*2;const s={start:angle,end:angle+a,...d};angle+=a;return s;});
+  const arc=(cx,cy,r,s,e)=>{const x1=cx+r*Math.cos(s),y1=cy+r*Math.sin(s),x2=cx+r*Math.cos(e),y2=cy+r*Math.sin(e),lg=e-s>Math.PI?1:0;return `M${cx},${cy} L${x1},${y1} A${r},${r},0,${lg},1,${x2},${y2} Z`;};
+  const [active,setActive]=useState(null);
+  return <div>
+    <svg viewBox="0 0 100 92" style={{width:140,height:'auto',display:'block',margin:'0 auto'}}>
+      {slices.map((s,i)=><path key={i} d={arc(cx,cy,active===i?r+2:r,s.start,s.end)} fill={CC[s.name]||'#64748b'} stroke="#0d1117" strokeWidth="0.6" style={{cursor:'pointer',transition:'all .12s'}} onMouseEnter={()=>setActive(i)} onMouseLeave={()=>setActive(null)}/>)}
+      {slices.map((s,i)=><path key={`i${i}`} d={arc(cx,cy,ir,s.start,s.end)} fill="#0d1117"/>)}
+      <text x={cx} y={cy-2} textAnchor="middle" fontSize="5.5" fontWeight="700" fill="#f1f5f9">{active!==null?fmtM(slices[active].value):fmtM(total)}</text>
+      <text x={cx} y={cy+4} textAnchor="middle" fontSize="4" fill="#64748b">{active!==null?slices[active].name:'합계'}</text>
+    </svg>
+    <div style={{display:'flex',flexDirection:'column',gap:4,marginTop:6}}>
+      {data.sort((a,b)=>b.value-a.value).map((d,i)=><div key={i} style={{display:'flex',alignItems:'center',justifyContent:'space-between',fontSize:12}}>
+        <div style={{display:'flex',alignItems:'center',gap:5}}><div style={{width:7,height:7,borderRadius:2,background:CC[d.name]||'#64748b',flexShrink:0}}/><span style={{color:'#94a3b8'}}>{d.name}</span></div>
+        <span style={{color:'#e2e8f0',fontWeight:600}}>{fmtW(d.value)}</span>
+      </div>)}
+      <div style={{borderTop:'1px solid #2d3f53',marginTop:4,paddingTop:5,display:'flex',justifyContent:'space-between',fontSize:13,fontWeight:700}}>
+        <span style={{color:'#64748b'}}>합계</span><span style={{color:'#ef4444'}}>{fmtW(total)}</span>
+      </div>
+    </div>
+  </div>;
+}
+
+/* ══════════════ APP ══════════════ */
+function App(){
+  const [page,setPage]=useState('dashboard');
+  const [rooms,setRooms]=useState(IR);
+  const [tenants,setTenants]=useState(IT);
+  const [notices,setNotices]=useState(IN2);
+  const [maint,setMaint]=useState(IM);
+  const [expenses,setExpenses]=useState(IE);
+  const [shopping,setShopping]=useState(ISH);
+  const [modal,setModal]=useState(null);
+  const [md,setMd]=useState(null);
+  const [toast,setToast]=useState(null);
+  const [klog,setKlog]=useState([]);
+  const [revMo,setRevMo]=useState(bmo(0));
+  const [newExp,setNewExp]=useState({category:'수도세',amount:'',memo:'',date:fmt(today)});
+  const [newShop,setNewShop]=useState({name:'',category:'소모품',qty:'',urgent:false,memo:''});
+  const [sideOpen,setSideOpen]=useState(false);
+
+  const showToast=(msg,type='success')=>{setToast({msg,type});setTimeout(()=>setToast(null),3000);};
+  const getRoomT=rid=>tenants.find(t=>t.roomId===rid);
+  const closeSide=()=>setSideOpen(false);
+
+  /* 통계 */
+  const stats={
+    total:rooms.length,
+    occupied:rooms.filter(r=>r.status==='occupied').length,
+    vacant:rooms.filter(r=>r.status==='vacant').length,
+    reserved:rooms.filter(r=>r.status==='reserved').length,
+    unpaid:tenants.filter(t=>!t.paid&&rooms.find(r=>r.id===t.roomId)?.status==='occupied').length,
+    monthlyRev:tenants.filter(t=>rooms.find(r=>r.id===t.roomId)?.status==='occupied').reduce((s,t)=>s+calcRent(t,rooms.find(r=>r.id===t.roomId)),0),
+    collected:tenants.filter(t=>t.paid&&rooms.find(r=>r.id===t.roomId)?.status==='occupied').reduce((s,t)=>s+calcRent(t,rooms.find(r=>r.id===t.roomId)),0),
+  };
+
+  /* 알림 데이터 */
+  const todayCheckin =tenants.filter(t=>t.moveIn===todayStr);
+  const todayCheckout=tenants.filter(t=>t.moveOut===todayStr);
+  const upcoming3    =tenants.filter(t=>{const d=diffDays(t.moveIn,todayStr);return d>0&&d<=7;}).sort((a,b)=>diffDays(a.moveIn,todayStr)-diffDays(b.moveIn,todayStr));
+  const expiring30   =tenants.filter(t=>t.moveOut&&diffDays(t.moveOut,todayStr)>=0&&diffDays(t.moveOut,todayStr)<=30).sort((a,b)=>diffDays(a.moveOut,todayStr)-diffDays(b.moveOut,todayStr));
+  const needsK       =tenants.filter(t=>!t.paid&&rooms.find(r=>r.id===t.roomId)?.status==='occupied'&&getPS(t).urgency>=1);
+  const urgentShop   =shopping.filter(s=>!s.done&&s.urgent);
+
+  /* 카카오 */
+// ─────────────────────────────────────────────────────────────
+//  goshiwon.html 안의 sendK 함수를 아래 코드로 교체하세요
+//  (기존 시뮬레이션 → 실제 Solapi 발송으로 전환)
+// ─────────────────────────────────────────────────────────────
+
+const sendK = async (t) => {
+  const room = rooms.find(r => r.id === t.roomId);
+  const s = getPS(t);
+  const mt = s.urgency === 3 ? 'overdue' : s.urgency === 2 ? 'today' : 'remind';
+
+  // 발송할 메시지 내용
+  const msgs = {
+    remind:  `[고시원 납부 안내]\n안녕하세요 ${t.name}님!\n${room?.id}호 ${rentLabel(t, room)} 납부일이 ${Math.abs(new Date().getDate() - t.payDay)}일 남았습니다.\n계좌: 국민 123-456-789\n감사합니다 🙏`,
+    today:   `[고시원 납부 안내]\n${t.name}님, 오늘이 납부일입니다!\n${room?.id}호 납부 부탁드립니다.\n계좌: 국민 123-456-789`,
+    overdue: `[고시원 납부 알림]\n${t.name}님, ${s.label} 상태입니다.\n빠른 납부 부탁드립니다. 문의: 010-XXXX-XXXX`,
+  };
+
+  const message = msgs[mt];
+
+  // ── 로그 먼저 추가 (발송 중 표시) ──
+  const logId = Date.now();
+  setKlog(prev => [{
+    id: logId,
+    tenantName: t.name,
+    roomId: room?.id,
+    message,
+    time: new Date().toLocaleTimeString('ko-KR'),
+    status: '발송 중...',
+  }, ...prev]);
+
+  try {
+    // ── Netlify Function 호출 ──
+    const res = await fetch('/.netlify/functions/sendKakao', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to:          t.phone,          // 수신번호
+        name:        t.name,
+        roomId:      t.roomId,
+        message,
+        messageType: 'SMS',            // 알림톡 템플릿 있으면 'ALIMTALK'
+      }),
+    });
+
+    const data = await res.json();
+
+    if (res.ok && data.success) {
+      // 성공
+      setKlog(prev => prev.map(l => l.id === logId
+        ? { ...l, status: '✅ 전송 완료' }
+        : l
+      ));
+      showToast(`${t.name}님께 카카오톡 전송 완료`);
+    } else {
+      // 실패
+      setKlog(prev => prev.map(l => l.id === logId
+        ? { ...l, status: `❌ 실패: ${data.error || '오류'}` }
+        : l
+      ));
+      showToast(`${t.name} 발송 실패: ${data.error}`, 'error');
+    }
+
+  } catch (err) {
+    setKlog(prev => prev.map(l => l.id === logId
+      ? { ...l, status: `❌ 네트워크 오류` }
+      : l
+    ));
+    showToast('네트워크 오류가 발생했습니다', 'error');
+  }
+};
+
+  const sendAllK=()=>{needsK.forEach(t=>sendK(t));showToast(`${needsK.length}명 발송 완료`);};
+  const markPaid=id=>{setTenants(prev=>prev.map(t=>t.id===id?{...t,paid:true,paidDate:fmt(today)}:t));showToast('납부 완료 처리');setModal(null);};
+
+  /* 매출 */
+  const months6=Array.from({length:6},(_,i)=>bmo(i-5));
+  const moLabel=mk=>{const[y,m]=mk.split('-');return`${y.slice(2)}/${m}`;};
+  const moExp=mk=>expenses.filter(e=>e.month===mk);
+  const moExpTot=mk=>moExp(mk).reduce((s,e)=>s+e.amount,0);
+  const moRev=mk=>mk===bmo(0)?stats.collected:(MR[mk]||0);
+  const moProfit=mk=>moRev(mk)-moExpTot(mk);
+  const barData=months6.map(mk=>({name:moLabel(mk),수입:moRev(mk),지출:moExpTot(mk),순이익:moProfit(mk)}));
+  const selExps=moExp(revMo);
+  const catPie=EXP_CATS.map(c=>({name:c,value:selExps.filter(e=>e.category===c).reduce((s,e)=>s+e.amount,0)})).filter(c=>c.value>0);
+
+  const addExpense=()=>{
+    const amt=parseInt((newExp.amount||'').replace(/,/g,''));
+    if(!amt||amt<=0){showToast('금액을 입력하세요','error');return;}
+    setExpenses(prev=>[...prev,{id:Date.now(),month:revMo,date:newExp.date,category:newExp.category,amount:amt,memo:newExp.memo}]);
+    setNewExp(p=>({...p,amount:'',memo:''}));showToast('지출 추가');
+  };
+
+  const floors=[...new Set(rooms.map(r=>r.floor))].sort();
+  const SC={occupied:'#3b82f6',vacant:'#22c55e',reserved:'#f59e0b'};
+  const SL={occupied:'입실',vacant:'공실',reserved:'예약'};
+  const CARD={background:'linear-gradient(135deg,#1e2d3d,#1a2332)',border:'1px solid #2d3f53',borderRadius:16,padding:16};
+  const LB={fontSize:12,color:'#64748b',marginBottom:5,display:'block',fontWeight:600};
+  const go=id=>{setPage(id);closeSide();};
+
+  const saveRoom=()=>{setRooms(prev=>prev.map(r=>r.id===md.id?{...md,monthlyRent:parseInt(md.monthlyRent)||0}:r));showToast('방 정보 저장');setModal(null);};
+  const saveTenant=()=>{
+    const upd={...md,deposit:parseInt(md.deposit)||0,payDay:parseInt(md.payDay)||1,dailyRate:parseInt(md.dailyRate)||0,roomId:parseInt(md.roomId)||md.roomId};
+    const exists=tenants.find(t=>t.id===md.id);
+    if(exists)setTenants(prev=>prev.map(t=>t.id===md.id?upd:t));
+    else{setTenants(prev=>[...prev,{...upd,id:Date.now()}]);if(md.roomId)setRooms(prev=>prev.map(r=>r.id===parseInt(md.roomId)?{...r,status:'occupied'}:r));}
+    showToast('저장 완료');setModal(null);
+  };
+
+  const navItems=[
+    {id:'dashboard',icon:'📋',label:'대시보드'},
+    {id:'revenue',icon:'📊',label:'매출 관리'},
+    {id:'rooms',icon:'🏠',label:'방 현황'},
+    {id:'tenants',icon:'👤',label:'입주자 관리'},
+    {id:'payments',icon:'💰',label:'납부 관리'},
+    {id:'kakao',icon:'💬',label:'카카오 알림'},
+    {id:'contracts',icon:'📄',label:'계약서 관리'},
+    {id:'shopping',icon:'🛒',label:'구매 리스트'},
+    {id:'maintenance',icon:'🔧',label:'시설 관리'},
+    {id:'notices',icon:'📢',label:'공지사항'},
+  ];
+  const totalAlerts=(todayCheckin.length+todayCheckout.length+upcoming3.length+expiring30.length+urgentShop.length);
+
+  return <div style={{fontFamily:"'Apple SD Gothic Neo','Noto Sans KR',sans-serif",background:'#0d1117',minHeight:'100vh',color:'#e2e8f0'}}>
+    <style>{`
+      @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap');
+      .rc{transition:all .18s;cursor:pointer}.rc:hover{transform:translateY(-2px);filter:brightness(1.1)}
+      .ab{border:none;cursor:pointer;font-family:inherit;border-radius:10px;transition:all .15s}.ab:active{transform:scale(.97);opacity:.88}
+      .nb{border:none;cursor:pointer;font-family:inherit;transition:background .15s;background:transparent;width:100%;text-align:left}
+      .nb:hover{background:rgba(255,255,255,.03)}
+      .kb{background:#FEE500!important;color:#3C1E1E!important}
+      .sc{background:linear-gradient(135deg,#1e2d3d,#1a2332);border:1px solid #2d3f53;border-radius:16px;padding:16px}
+      .fi{animation:fi .22s ease}@keyframes fi{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+      .pl{animation:pl 2s infinite}@keyframes pl{0%,100%{opacity:1}50%{opacity:.5}}
+      .moov{position:fixed;inset:0;background:rgba(0,0,0,.82);display:flex;align-items:flex-end;justify-content:center;z-index:200;backdrop-filter:blur(6px)}
+      @media(min-width:600px){.moov{align-items:center}}
+      .mobox{background:#1a2332;border:1px solid #2d3f53;border-radius:20px 20px 0 0;padding:20px;width:100%;max-width:580px;max-height:93vh;overflow-y:auto}
+      @media(min-width:600px){.mobox{border-radius:20px}}
+      .tg{display:inline-block;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600}
+      .if{background:#0d1117;border:1px solid #2d3f53;border-radius:10px;color:#e2e8f0;padding:11px 13px;font-family:inherit;font-size:14px;width:100%;outline:none;transition:border .2s;display:block}.if:focus{border-color:#3b82f6}
+      select.if option{background:#1a2332}
+      .st{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#64748b;margin-bottom:10px}
+      .tap{transition:background .1s;cursor:pointer;border-radius:14px}.tap:active{background:#1a2332!important}
+      .alertcard{border-radius:12px;padding:10px 13px;margin-bottom:7px;display:flex;align-items:center;gap:10}
+    `}</style>
+
+    <div id="ov" className={sideOpen?'open':''} onClick={closeSide}/>
+
+    {/* Sidebar */}
+    <div id="sidebar" className={sideOpen?'open':''} style={{position:'fixed',left:0,top:0,bottom:0,width:224,background:'#111827',borderRight:'1px solid #1e2d3d',zIndex:99,display:'flex',flexDirection:'column',overflowY:'auto'}}>
+      <div style={{padding:'18px 18px 12px',borderBottom:'1px solid #1e2d3d'}}>
+        <div style={{fontSize:10,fontWeight:700,letterSpacing:'.2em',color:'#64748b',marginBottom:2}}>GOSHIWON</div>
+        <div style={{fontSize:17,fontWeight:700,color:'#f8fafc'}}>관리 시스템</div>
+        <div style={{fontSize:12,color:'#475569',marginTop:2}}>{new Date().toLocaleDateString('ko-KR',{month:'long',day:'numeric',weekday:'short'})}</div>
+      </div>
+      <nav style={{padding:'6px 0',flex:1}}>
+        {navItems.map(item=>(
+          <button key={item.id} className="nb" onClick={()=>go(item.id)} style={{display:'flex',alignItems:'center',gap:9,padding:'11px 17px',fontSize:13,fontWeight:500,background:page===item.id?'linear-gradient(90deg,#1d4ed8,#1e3a8a)':'transparent',color:page===item.id?'#fff':'#94a3b8',borderLeft:page===item.id?'3px solid #3b82f6':'3px solid transparent'}}>
+            <span style={{fontSize:15}}>{item.icon}</span>{item.label}
+            {item.id==='payments'&&stats.unpaid>0&&<span style={{marginLeft:'auto',background:'#ef4444',color:'#fff',borderRadius:10,padding:'1px 6px',fontSize:10,fontWeight:700}}>{stats.unpaid}</span>}
+            {item.id==='kakao'&&needsK.length>0&&<span className="pl" style={{marginLeft:'auto',background:'#FEE500',color:'#3C1E1E',borderRadius:10,padding:'1px 6px',fontSize:10,fontWeight:700}}>{needsK.length}</span>}
+            {item.id==='shopping'&&urgentShop.length>0&&<span style={{marginLeft:'auto',background:'#f97316',color:'#fff',borderRadius:10,padding:'1px 6px',fontSize:10,fontWeight:700}}>{urgentShop.length}</span>}
+            {item.id==='maintenance'&&maint.filter(m=>m.status!=='완료').length>0&&<span style={{marginLeft:'auto',background:'#f97316',color:'#fff',borderRadius:10,padding:'1px 6px',fontSize:10,fontWeight:700}}>{maint.filter(m=>m.status!=='완료').length}</span>}
+            {item.id==='dashboard'&&totalAlerts>0&&<span style={{marginLeft:'auto',background:'#ef4444',color:'#fff',borderRadius:10,padding:'1px 6px',fontSize:10,fontWeight:700}}>{totalAlerts}</span>}
+          </button>
+        ))}
+      </nav>
+      <div style={{padding:'10px 17px',borderTop:'1px solid #1e2d3d',fontSize:11,color:'#475569',lineHeight:1.9}}>
+        <div>총 {stats.total}개 · 공실 <span style={{color:'#22c55e'}}>{stats.vacant}</span>개</div>
+        <div>입실률 {Math.round((stats.occupied/stats.total)*100)}%</div>
+      </div>
+    </div>
+
+    {/* Mobile Header */}
+    <div id="mobHeader" style={{alignItems:'center',gap:10}}>
+      <button className="ab" onClick={()=>setSideOpen(true)} style={{background:'none',padding:'6px 8px',fontSize:22,color:'#94a3b8',lineHeight:1,flexShrink:0}}>☰</button>
+      <div style={{fontWeight:700,fontSize:16,color:'#f8fafc',flex:1}}>{navItems.find(n=>n.id===page)?.label}</div>
+      {stats.unpaid>0&&<span style={{background:'#ef4444',color:'#fff',borderRadius:20,padding:'4px 9px',fontSize:12,fontWeight:700}}>미납 {stats.unpaid}</span>}
+    </div>
+
+    {/* Main */}
+    <div id="main" style={{marginLeft:224,padding:'22px 24px',minHeight:'100vh'}}>
+
+      {/* ━━━ 대시보드 ━━━ */}
+      {page==='dashboard'&&<div className="fi">
+        <h1 style={{fontSize:21,fontWeight:700,color:'#f8fafc',marginBottom:14}}>대시보드</h1>
+
+        {/* 기본 통계 */}
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:9,marginBottom:11}}>
+          {[{l:'전체',v:stats.total,u:'개',c:'#3b82f6'},{l:'입실중',v:stats.occupied,u:'개',c:'#22c55e'},{l:'공실',v:stats.vacant,u:'개',c:'#f59e0b'},{l:'미납자',v:stats.unpaid,u:'명',c:'#ef4444'}].map(s=>(
+            <div key={s.l} className="sc" style={{padding:'13px'}}>
+              <div style={{fontSize:11,color:'#64748b',fontWeight:600,marginBottom:5}}>{s.l}</div>
+              <div style={{fontSize:28,fontWeight:700,color:s.c,lineHeight:1}}>{s.v}<span style={{fontSize:12,fontWeight:400,color:'#64748b'}}>{s.u}</span></div>
+            </div>
+          ))}
+        </div>
+
+        {/* 수납 현황 */}
+        <div className="sc" style={{marginBottom:11,padding:'13px'}}>
+          <div className="st">이번 달 현황</div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:10}}>
+            {[{l:'예상 수입',v:stats.monthlyRev,c:'#3b82f6'},{l:'수납 완료',v:stats.collected,c:'#22c55e'},{l:'이달 지출',v:moExpTot(bmo(0)),c:'#ef4444'}].map(s=>(
+              <div key={s.l} style={{background:'#0d1117',borderRadius:9,padding:'10px 8px',textAlign:'center'}}>
+                <div style={{fontSize:10,color:'#64748b',marginBottom:3}}>{s.l}</div>
+                <div style={{fontSize:15,fontWeight:700,color:s.c}}>{fmtM(s.v)}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{background:'#0d1117',borderRadius:6,overflow:'hidden',height:7,marginBottom:5}}>
+            <div style={{height:'100%',width:`${Math.min(100,Math.round((stats.collected/Math.max(1,stats.monthlyRev))*100))}%`,background:'linear-gradient(90deg,#3b82f6,#22c55e)',borderRadius:6,transition:'width .8s'}}/>
+          </div>
+          <div style={{fontSize:11,color:'#64748b'}}>수납률 {Math.round((stats.collected/Math.max(1,stats.monthlyRev))*100)}%</div>
+        </div>
+
+        {/* ── 오늘 알림 ── */}
+        {(todayCheckin.length>0||todayCheckout.length>0)&&<div className="sc" style={{marginBottom:11,padding:'13px',border:'1px solid #ef444444'}}>
+          <div className="st" style={{color:'#ef4444'}}>🔴 오늘 일정</div>
+          {todayCheckin.map(t=><div key={t.id} className="alertcard" style={{background:'#22c55e11',border:'1px solid #22c55e33'}}>
+            <span style={{fontSize:18}}>🏠</span>
+            <div style={{flex:1}}><div style={{fontWeight:600,fontSize:14}}>오늘 입실 — {t.name}</div><div style={{fontSize:12,color:'#64748b'}}>{t.roomId}호 · {t.phone}</div></div>
+            <span className="tg" style={{background:'#22c55e22',color:'#22c55e'}}>입실일</span>
+          </div>)}
+          {todayCheckout.map(t=><div key={t.id} className="alertcard" style={{background:'#ef444411',border:'1px solid #ef444433'}}>
+            <span style={{fontSize:18}}>📦</span>
+            <div style={{flex:1}}><div style={{fontWeight:600,fontSize:14}}>오늘 퇴실 — {t.name}</div><div style={{fontSize:12,color:'#64748b'}}>{t.roomId}호 · {t.phone}</div></div>
+            <span className="tg" style={{background:'#ef444422',color:'#ef4444'}}>퇴실일</span>
+          </div>)}
+        </div>}
+
+        {/* ── 입실 예정 (7일 내) ── */}
+        {upcoming3.length>0&&<div className="sc" style={{marginBottom:11,padding:'13px'}}>
+          <div className="st">📅 입실 예정 (7일 내)</div>
+          {upcoming3.map(t=>{const d=diffDays(t.moveIn,todayStr);const room=rooms.find(r=>r.id===t.roomId);return(
+            <div key={t.id} className="alertcard" style={{background:'#f59e0b11',border:'1px solid #f59e0b33'}}>
+              <div style={{textAlign:'center',minWidth:36,background:'#f59e0b22',borderRadius:8,padding:'4px 6px'}}>
+                <div style={{fontSize:16,fontWeight:700,color:'#f59e0b',lineHeight:1}}>{d}</div>
+                <div style={{fontSize:9,color:'#f59e0b'}}>일 후</div>
+              </div>
+              <div style={{flex:1}}>
+                <div style={{fontWeight:600,fontSize:14}}>{t.name}</div>
+                <div style={{fontSize:12,color:'#64748b'}}>{t.roomId}호 · {t.moveIn} · {t.phone}</div>
+              </div>
+              <div style={{textAlign:'right'}}>
+                <div style={{fontSize:12,fontWeight:600,color:'#93c5fd'}}>{rentLabel(t,room)}</div>
+                {t.stayType!=='월'&&<span className="tg" style={{background:'#8b5cf622',color:'#8b5cf6',fontSize:10}}>{t.stayType}단위</span>}
+              </div>
+            </div>
+          );})}
+        </div>}
+
+        {/* ── 계약 만료 임박 ── */}
+        {expiring30.length>0&&<div className="sc" style={{marginBottom:11,padding:'13px'}}>
+          <div className="st">⏰ 계약 만료 임박 (30일 내)</div>
+          {expiring30.map(t=>{const d=diffDays(t.moveOut,todayStr);return(
+            <div key={t.id} className="alertcard" style={{background:d<=7?'#ef444411':'#f59e0b11',border:`1px solid ${d<=7?'#ef444433':'#f59e0b33'}`}}>
+              <div style={{textAlign:'center',minWidth:36,background:d<=7?'#ef444422':'#f59e0b22',borderRadius:8,padding:'4px 6px'}}>
+                <div style={{fontSize:16,fontWeight:700,color:d<=7?'#ef4444':'#f59e0b',lineHeight:1}}>{d}</div>
+                <div style={{fontSize:9,color:d<=7?'#ef4444':'#f59e0b'}}>일 남음</div>
+              </div>
+              <div style={{flex:1}}>
+                <div style={{fontWeight:600,fontSize:14}}>{t.name}</div>
+                <div style={{fontSize:12,color:'#64748b'}}>{t.roomId}호 · 만료: {t.moveOut}</div>
+              </div>
+              <button className="ab" style={{background:'#1d4ed8',color:'#fff',padding:'7px 12px',fontSize:12,fontWeight:600}} onClick={()=>{setMd({...t});setModal('editTenant');}}>연장</button>
+            </div>
+          );})}
+        </div>}
+
+        {/* ── 납부 알림 필요 ── */}
+        {needsK.length>0&&<div className="sc" style={{marginBottom:11,padding:'13px'}}>
+          <div className="st">⚠️ 납부 알림 필요 ({needsK.length}명)</div>
+          {needsK.slice(0,3).map(t=>{const s=getPS(t);return(
+            <div key={t.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'9px 0',borderBottom:'1px solid #1e2d3d'}}>
+              <div><div style={{fontSize:13,fontWeight:600}}>{t.name} <span style={{color:'#64748b',fontSize:12}}>{t.roomId}호</span></div><div style={{fontSize:11,color:s.color}}>{s.label}</div></div>
+              <button className="ab kb" style={{padding:'8px 14px',fontWeight:700,fontSize:12,borderRadius:20}} onClick={()=>sendK(t)}>카톡</button>
+            </div>
+          );})}
+          {needsK.length>3&&<div style={{fontSize:11,color:'#64748b',textAlign:'center',paddingTop:8}}>+{needsK.length-3}명 더 → 납부 관리에서 확인</div>}
+        </div>}
+
+        {/* ── 긴급 구매 ── */}
+        {urgentShop.length>0&&<div className="sc" style={{marginBottom:11,padding:'13px'}}>
+          <div className="st">🛒 긴급 구매 필요</div>
+          {urgentShop.map(s=><div key={s.id} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 0',borderBottom:'1px solid #1e2d3d'}}>
+            <span className="tg" style={{background:'#ef444422',color:'#ef4444'}}>긴급</span>
+            <div style={{flex:1}}><div style={{fontSize:13,fontWeight:600}}>{s.name}</div><div style={{fontSize:11,color:'#64748b'}}>{s.qty}{s.memo&&` · ${s.memo}`}</div></div>
+            <button className="ab" style={{background:'#22c55e',color:'#fff',padding:'6px 12px',fontSize:12}} onClick={()=>setShopping(prev=>prev.map(x=>x.id===s.id?{...x,done:true}:x))}>완료</button>
+          </div>)}
+        </div>}
+
+        {/* ── 미니 차트 ── */}
+        <div style={CARD}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+            <div className="st" style={{margin:0}}>최근 6개월 수입 / 지출</div>
+            <button className="ab" style={{background:'#1d4ed8',color:'#fff',padding:'6px 12px',fontSize:12}} onClick={()=>setPage('revenue')}>상세 →</button>
+          </div>
+          <MiniBarChart data={barData} keys={['수입','지출']} colors={['#3b82f6','#ef444488']} height={160}/>
+        </div>
+      </div>}
+
+      {/* ━━━ 매출 관리 ━━━ */}
+      {page==='revenue'&&<div className="fi">
+        <h1 style={{fontSize:21,fontWeight:700,color:'#f8fafc',marginBottom:14}}>매출 관리</h1>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:9,marginBottom:11}}>
+          {[{l:'이달 수납',v:moRev(bmo(0)),c:'#3b82f6',i:'💰'},{l:'이달 지출',v:moExpTot(bmo(0)),c:'#ef4444',i:'📤'},{l:'이달 순이익',v:moProfit(bmo(0)),c:moProfit(bmo(0))>=0?'#22c55e':'#ef4444',i:'📈'},{l:'전월 대비',v:moProfit(bmo(0))-moProfit(bmo(-1)),c:(moProfit(bmo(0))-moProfit(bmo(-1)))>=0?'#22c55e':'#ef4444',i:'↕️',p:true}].map(s=>(
+            <div key={s.l} className="sc" style={{padding:'13px'}}><div style={{fontSize:10,color:'#64748b',marginBottom:3}}>{s.i} {s.l}</div><div style={{fontSize:18,fontWeight:700,color:s.c}}>{s.p&&s.v>0?'+':''}{fmtM(s.v)}</div></div>
+          ))}
+        </div>
+        <div style={{...CARD,marginBottom:11}}>
+          <div className="st">월별 수입 / 지출 / 순이익</div>
+          <MiniBarChart data={barData} keys={['수입','지출','순이익']} colors={['#3b82f6','#ef4444aa','#22c55e88']} height={200}/>
+        </div>
+        <div style={{...CARD,marginBottom:11}}>
+          <div className="st">순이익 추이</div>
+          <MiniLineChart data={barData} dataKey="순이익" color="#22c55e" height={130}/>
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1.4fr',gap:11,marginBottom:11}}>
+          <div style={CARD}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+              <div className="st" style={{margin:0}}>지출 비중</div>
+              <select className="if" style={{width:'auto',padding:'5px 8px',fontSize:12}} value={revMo} onChange={e=>setRevMo(e.target.value)}>
+                {months6.map(mk=><option key={mk} value={mk}>{mk}</option>)}
+              </select>
+            </div>
+            <DonutChart data={catPie}/>
+          </div>
+          <div style={{...CARD,display:'flex',flexDirection:'column'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+              <div className="st" style={{margin:0}}>지출 내역 — {revMo}</div>
+              <select className="if" style={{width:'auto',padding:'5px 8px',fontSize:12}} value={revMo} onChange={e=>setRevMo(e.target.value)}>
+                {months6.map(mk=><option key={mk} value={mk}>{mk}</option>)}
+              </select>
+            </div>
+            <div style={{background:'#0d1117',borderRadius:11,padding:12,marginBottom:10}}>
+              <div style={{fontSize:11,fontWeight:700,color:'#64748b',marginBottom:8}}>+ 지출 추가</div>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:7,marginBottom:7}}>
+                <select className="if" style={{fontSize:13}} value={newExp.category} onChange={e=>setNewExp(p=>({...p,category:e.target.value}))}>
+                  {EXP_CATS.map(c=><option key={c}>{c}</option>)}
+                </select>
+                <input className="if" style={{fontSize:13}} placeholder="금액 (원)" value={newExp.amount} onChange={e=>setNewExp(p=>({...p,amount:e.target.value}))} onKeyDown={e=>e.key==='Enter'&&addExpense()}/>
+              </div>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:7,marginBottom:8}}>
+                <input className="if" type="date" style={{fontSize:13}} value={newExp.date} onChange={e=>setNewExp(p=>({...p,date:e.target.value}))}/>
+                <input className="if" style={{fontSize:13}} placeholder="메모" value={newExp.memo} onChange={e=>setNewExp(p=>({...p,memo:e.target.value}))}/>
+              </div>
+              <button className="ab" style={{width:'100%',background:'#1d4ed8',color:'#fff',padding:'11px',fontSize:14,fontWeight:700}} onClick={addExpense}>추가</button>
+            </div>
+            <div style={{flex:1,overflowY:'auto',maxHeight:260}}>
+              {selExps.length===0?<div style={{textAlign:'center',color:'#64748b',padding:'16px 0',fontSize:12}}>지출 없음</div>
+              :selExps.sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(e=>(
+                <div key={e.id} style={{display:'flex',alignItems:'center',gap:7,padding:'8px 0',borderBottom:'1px solid #1e2d3d'}}>
+                  <span className="tg" style={{background:(CC[e.category]||'#64748b')+'22',color:CC[e.category]||'#64748b',flexShrink:0,fontSize:10}}>{e.category}</span>
+                  <div style={{flex:1}}><div style={{fontSize:13,fontWeight:700}}>{e.amount.toLocaleString()}원</div><div style={{fontSize:11,color:'#64748b'}}>{e.date||'-'}{e.memo&&` · ${e.memo}`}</div></div>
+                  <button style={{background:'none',border:'none',cursor:'pointer',color:'#475569',fontSize:17,padding:'2px 5px',lineHeight:1}} onClick={()=>{setExpenses(prev=>prev.filter(x=>x.id!==e.id));showToast('삭제');}}>×</button>
+                </div>
+              ))}
+              {selExps.length>0&&<div style={{display:'flex',justifyContent:'space-between',padding:'9px 0 0',fontWeight:700,fontSize:13}}>
+                <span style={{color:'#64748b'}}>합계</span><span style={{color:'#ef4444'}}>{selExps.reduce((s,e)=>s+e.amount,0).toLocaleString()}원</span>
+              </div>}
+            </div>
+          </div>
+        </div>
+        <div style={CARD}>
+          <div className="st">월별 손익 요약</div>
+          {[...months6].reverse().map(mk=>{const rev=moRev(mk),tot=moExpTot(mk),profit=rev-tot,isThis=mk===bmo(0);return(
+            <div key={mk} style={{background:isThis?'#1d4ed811':'transparent',borderRadius:10,padding:'10px 12px',marginBottom:5,border:`1px solid ${isThis?'#1d4ed844':'#1e2d3d'}`}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
+                <span style={{fontWeight:700,color:'#93c5fd',fontSize:13}}>{mk}{isThis&&<span style={{marginLeft:5,fontSize:9,background:'#1d4ed8',color:'#fff',borderRadius:4,padding:'1px 4px'}}>이달</span>}</span>
+                <span style={{fontWeight:700,color:profit>=0?'#22c55e':'#ef4444',fontSize:13}}>{profit>=0?'+':''}{fmtM(profit)}</span>
+              </div>
+              <div style={{display:'flex',gap:12,fontSize:11,color:'#94a3b8',flexWrap:'wrap'}}>
+                <span>수입 <strong style={{color:'#3b82f6'}}>{fmtM(rev)}</strong></span>
+                <span>지출 <strong style={{color:'#ef4444'}}>{fmtM(tot)}</strong></span>
+                <span>이익률 <strong style={{color:rev>0?(profit/rev)>=0.3?'#22c55e':'#f59e0b':'#64748b'}}>{rev>0?Math.round((profit/rev)*100)+'%':'-'}</strong></span>
+              </div>
+            </div>
+          );})}
+        </div>
+      </div>}
+
+      {/* ━━━ 방 현황 ━━━ */}
+      {page==='rooms'&&<div className="fi">
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+          <h1 style={{fontSize:21,fontWeight:700,color:'#f8fafc'}}>방 현황</h1>
+          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+            {Object.entries(SL).map(([k,v])=><div key={k} style={{display:'flex',alignItems:'center',gap:4,fontSize:11,color:'#94a3b8'}}><div style={{width:8,height:8,borderRadius:2,background:SC[k]}}/>{v}</div>)}
+          </div>
+        </div>
+        {floors.map(floor=>(
+          <div key={floor} style={{marginBottom:20}}>
+            <div style={{fontSize:11,fontWeight:700,color:'#64748b',marginBottom:9}}>{floor}층</div>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(138px,1fr))',gap:9}}>
+              {rooms.filter(r=>r.floor===floor).map(room=>{
+                const t=getRoomT(room.id);const ps=t?getPS(t):null;
+                const daysToMoveIn=t?.moveIn?diffDays(t.moveIn,todayStr):null;
+                return <div key={room.id} className="rc" onClick={()=>{setMd({...room});setModal('editRoom');}} style={{borderRadius:12,padding:12,background:room.status==='occupied'?'linear-gradient(135deg,#1e3a8a22,#1e2d3d)':room.status==='reserved'?'linear-gradient(135deg,#451a0322,#1e2d3d)':'linear-gradient(135deg,#14532d22,#1e2d3d)',border:`1.5px solid ${SC[room.status]}55`,position:'relative'}}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:4}}>
+                    <div style={{fontSize:17,fontWeight:700}}>{room.id}</div>
+                    <span className="tg" style={{background:SC[room.status]+'33',color:SC[room.status],fontSize:10}}>{SL[room.status]}</span>
+                  </div>
+                  <div style={{fontSize:10,color:'#64748b'}}>{room.type==='double'?'더블':'싱글'} · {room.size}</div>
+                  <div style={{fontSize:11,fontWeight:600,color:'#94a3b8',marginTop:2}}>{fmtW(room.monthlyRent)}</div>
+                  {t&&<div style={{marginTop:6,paddingTop:6,borderTop:'1px solid #2d3f53'}}>
+                    <div style={{fontSize:12,fontWeight:600,color:'#e2e8f0'}}>{t.name}</div>
+                    {/* 예약자: 입실 예정일 표시 */}
+                    {room.status==='reserved'&&t.reserveDate&&<div style={{fontSize:10,color:'#f59e0b',marginTop:2}}>📅 {t.reserveDate} 입실 예정 {daysToMoveIn!==null&&daysToMoveIn>0?`(${daysToMoveIn}일 후)`:daysToMoveIn===0?'(오늘)':''}</div>}
+                    {t.stayType!=='월'&&<span className="tg" style={{background:'#8b5cf622',color:'#8b5cf6',fontSize:9,marginTop:2}}>{t.stayType}단위</span>}
+                    {ps&&room.status==='occupied'&&<div style={{fontSize:10,color:ps.color,marginTop:2}}>{ps.label}</div>}
+                    {/* 퇴실 임박 */}
+                    {t.moveOut&&diffDays(t.moveOut,todayStr)>=0&&diffDays(t.moveOut,todayStr)<=14&&<div style={{fontSize:10,color:'#ef4444',marginTop:1}}>⚠️ {diffDays(t.moveOut,todayStr)}일 후 만료</div>}
+                  </div>}
+                  {room.status==='vacant'&&<div style={{marginTop:6,fontSize:10,color:'#22c55e',paddingTop:6,borderTop:'1px solid #2d3f53'}}>입실 가능 ✓</div>}
+                  <div style={{position:'absolute',top:6,right:7,fontSize:11,color:'#475569'}}>✏️</div>
+                </div>;
+              })}
+            </div>
+          </div>
+        ))}
+      </div>}
+
+      {/* ━━━ 입주자 관리 ━━━ */}
+      {page==='tenants'&&<div className="fi">
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+          <h1 style={{fontSize:21,fontWeight:700,color:'#f8fafc'}}>입주자 관리</h1>
+          <button className="ab" style={{background:'#1d4ed8',color:'#fff',padding:'10px 16px',fontWeight:600,fontSize:13}} onClick={()=>{setMd({id:null,name:'',phone:'',roomId:'',moveIn:fmt(today),moveOut:'',payDay:1,deposit:0,paid:false,paidDate:null,memo:'',contractFile:null,contractName:null,stayType:'월',dailyRate:0,reserveDate:''});setModal('editTenant');}}>+ 추가</button>
+        </div>
+        <div style={{display:'flex',flexDirection:'column',gap:9}}>
+          {tenants.map(t=>{
+            const room=rooms.find(r=>r.id===t.roomId);const ps=getPS(t);const rs=rooms.find(r=>r.id===t.roomId);
+            const dLeft=t.moveOut?diffDays(t.moveOut,todayStr):null;
+            return <div key={t.id} className="tap" onClick={()=>{setMd({...t});setModal('editTenant');}} style={{background:'#111827',border:`1px solid ${ps.urgency>=2?ps.color+'55':'#1e2d3d'}`,padding:'13px 14px'}}>
+              <div style={{display:'flex',alignItems:'center',gap:9,marginBottom:7}}>
+                <div style={{fontWeight:700,color:'#93c5fd',fontSize:16,minWidth:40}}>{t.roomId}호</div>
+                <div style={{flex:1}}><div style={{fontWeight:600,fontSize:14}}>{t.name}</div><div style={{fontSize:11,color:'#64748b'}}>{t.phone}</div></div>
+                <span className="tg" style={{background:ps.color+'22',color:ps.color,flexShrink:0}}>{ps.label}</span>
+                <span style={{color:'#475569',fontSize:18}}>›</span>
+              </div>
+              <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
+                <span className="tg" style={{background:'#1d4ed822',color:'#93c5fd',fontSize:10}}>{rentLabel(t,room)}</span>
+                {t.stayType!=='월'&&<span className="tg" style={{background:'#8b5cf622',color:'#8b5cf6',fontSize:10}}>{t.stayType}단위</span>}
+                {rs?.status==='reserved'&&t.reserveDate&&<span className="tg" style={{background:'#f59e0b22',color:'#f59e0b',fontSize:10}}>📅 {t.reserveDate} 입실예정</span>}
+                <span className="tg" style={{background:'#1e2d3d',color:'#64748b',fontSize:10}}>매월 {t.payDay}일</span>
+                {t.moveOut&&<span className="tg" style={{background:dLeft!==null&&dLeft<=30?'#ef444422':'#1e2d3d',color:dLeft!==null&&dLeft<=30?'#ef4444':'#64748b',fontSize:10}}>~{t.moveOut}{dLeft!==null&&dLeft<=30?` (${dLeft}일 남음)`:''}</span>}
+              </div>
+            </div>;
+          })}
+        </div>
+      </div>}
+
+      {/* ━━━ 납부 관리 ━━━ */}
+      {page==='payments'&&<div className="fi">
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+          <h1 style={{fontSize:21,fontWeight:700,color:'#f8fafc'}}>납부 관리</h1>
+          <button className="ab kb" style={{padding:'10px 16px',fontWeight:700,borderRadius:20,fontSize:13}} onClick={sendAllK}>💬 일괄 카톡</button>
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:9,marginBottom:14}}>
+          {[{l:'납부 완료',cn:tenants.filter(t=>t.paid&&rooms.find(r=>r.id===t.roomId)?.status==='occupied').length,a:stats.collected,c:'#22c55e'},{l:'미납',cn:tenants.filter(t=>!t.paid&&rooms.find(r=>r.id===t.roomId)?.status==='occupied').length,a:stats.monthlyRev-stats.collected,c:'#ef4444'},{l:'예상 수입',cn:null,a:stats.monthlyRev,c:'#3b82f6'}].map(s=>(
+            <div key={s.l} className="sc" style={{padding:'12px 10px'}}>
+              <div style={{fontSize:10,color:'#64748b',marginBottom:2}}>{s.l}</div>
+              {s.cn!==null&&<div style={{fontSize:11,color:'#94a3b8',marginBottom:2}}>{s.cn}명</div>}
+              <div style={{fontSize:15,fontWeight:700,color:s.c}}>{fmtM(s.a)}</div>
+            </div>
+          ))}
+        </div>
+        {['unpaid','paid'].map(group=>(
+          <div key={group} style={{marginBottom:14}}>
+            <div className="st">{group==='unpaid'?'⚠️ 미납 / 납부 예정':'✅ 납부 완료'}</div>
+            {tenants.filter(t=>rooms.find(r=>r.id===t.roomId)?.status==='occupied'&&(group==='unpaid'?!t.paid:t.paid)).sort((a,b)=>getPS(b).urgency-getPS(a).urgency).map(t=>{
+              const room=rooms.find(r=>r.id===t.roomId);const ps=getPS(t);
+              return <div key={t.id} style={{background:'#111827',border:`1px solid ${ps.urgency>=2?ps.color+'44':'#1e2d3d'}`,borderRadius:13,padding:'13px 14px',marginBottom:7}}>
+                <div style={{display:'flex',alignItems:'center',gap:9,marginBottom:!t.paid?9:3}}>
+                  <div style={{fontWeight:700,color:'#93c5fd',minWidth:40}}>{t.roomId}호</div>
+                  <div style={{flex:1}}><div style={{fontWeight:600,color:'#f1f5f9',fontSize:14}}>{t.name}</div><div style={{fontSize:11,color:'#64748b'}}>매월 {t.payDay}일 · {rentLabel(t,room)}</div></div>
+                  <span className="tg" style={{background:ps.color+'22',color:ps.color,flexShrink:0}}>{ps.label}</span>
+                </div>
+                {!t.paid&&<div style={{display:'flex',gap:7}}>
+                  <button className="ab kb" style={{flex:1,padding:'10px',fontWeight:700,fontSize:13}} onClick={()=>sendK(t)}>💬 카톡</button>
+                  <button className="ab" style={{flex:1,background:'#22c55e',color:'#fff',padding:'10px',fontWeight:600,fontSize:13}} onClick={()=>markPaid(t.id)}>납부확인</button>
+                </div>}
+                {t.paid&&<div style={{fontSize:11,color:'#22c55e'}}>✓ {t.paidDate} 납부 완료</div>}
+              </div>;
+            })}
+          </div>
+        ))}
+      </div>}
+
+      {/* ━━━ 카카오 알림 ━━━ */}
+      {page==='kakao'&&<div className="fi">
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+          <h1 style={{fontSize:21,fontWeight:700,color:'#f8fafc'}}>카카오 알림</h1>
+          {needsK.length>0&&<button className="ab kb" style={{padding:'10px 16px',fontWeight:700,borderRadius:20,fontSize:13}} onClick={sendAllK}>전체 발송 ({needsK.length})</button>}
+        </div>
+        {/* Solapi 연동 안내 */}
+        <div style={{background:'#FEE50011',border:'1px solid #FEE50033',borderRadius:14,padding:16,marginBottom:14}}>
+          <div style={{fontSize:14,fontWeight:700,color:'#FEE500',marginBottom:10}}>💬 솔라피(Solapi) 연동 방법</div>
+          <div style={{background:'#ef444411',border:'1px solid #ef444433',borderRadius:8,padding:'9px 12px',marginBottom:10}}>
+            <div style={{fontSize:12,fontWeight:700,color:'#ef4444',marginBottom:2}}>⚠️ API 키 보안 주의</div>
+            <div style={{fontSize:11,color:'#94a3b8',lineHeight:1.7}}>API 키를 HTML 파일에 직접 넣으면 <strong style={{color:'#ef4444'}}>누구나 볼 수 있습니다.</strong><br/>반드시 Netlify Function (서버 측)에 숨겨야 합니다. 채팅에 공유된 키가 있다면 <strong style={{color:'#ef4444'}}>즉시 재발급</strong> 하세요.</div>
+          </div>
+          {[
+            {n:'① Netlify Function 파일 생성',d:'netlify/functions/sendKakao.js 를 프로젝트에 추가'},
+            {n:'② Netlify 환경변수 설정',d:'SOLAPI_KEY=발급받은키  /  SOLAPI_SECRET=시크릿키 입력'},
+            {n:'③ 발신번호 등록',d:'솔라피 대시보드 → 발신번호 등록 (본인 번호 인증 필요)'},
+            {n:'④ 카카오 채널 연동',d:'솔라피 → 카카오 알림톡 채널 연결 후 템플릿 심사 신청'},
+          ].map(s=><div key={s.n} style={{background:'#0d1117',borderRadius:8,padding:'9px 12px',marginBottom:6}}>
+            <div style={{fontSize:12,fontWeight:700,color:'#FEE500',marginBottom:1}}>{s.n}</div>
+            <div style={{fontSize:11,color:'#94a3b8'}}>{s.d}</div>
+          </div>)}
+          <div style={{fontSize:11,color:'#64748b',marginTop:4}}>* Netlify Function 코드 전체를 요청하시면 바로 드릴게요!</div>
+        </div>
+        <div className="st">발송 대상 ({needsK.length}명)</div>
+        {needsK.length===0?<div style={{background:'#111827',border:'1px solid #1e2d3d',borderRadius:13,padding:24,textAlign:'center',color:'#64748b',marginBottom:11}}>현재 발송 대상 없음 ✓</div>
+        :needsK.map(t=>{const ps=getPS(t);return(
+          <div key={t.id} style={{background:'#111827',border:'1px solid #1e2d3d',borderRadius:13,padding:'13px 14px',display:'flex',alignItems:'center',gap:9,marginBottom:7,flexWrap:'wrap'}}>
+            <div style={{fontWeight:700,color:'#93c5fd',minWidth:40}}>{t.roomId}호</div>
+            <div style={{flex:1}}><div style={{fontWeight:600,fontSize:14}}>{t.name}</div><div style={{fontSize:11,color:'#64748b'}}>{t.phone}</div></div>
+            <span className="tg" style={{background:ps.color+'22',color:ps.color,flexShrink:0}}>{ps.label}</span>
+            <button className="ab kb" style={{padding:'8px 14px',fontWeight:700,borderRadius:20,fontSize:12}} onClick={()=>sendK(t)}>발송</button>
+          </div>
+        );})}
+        {klog.length>0&&<><div className="st" style={{marginTop:10}}>발송 내역</div>
+          {klog.map(log=><div key={log.id} style={{background:'#111827',border:'1px solid #1e2d3d',borderRadius:13,padding:13,marginBottom:7}}>
+            <div style={{display:'flex',justifyContent:'space-between',marginBottom:7,flexWrap:'wrap',gap:3}}>
+              <div style={{fontWeight:600,fontSize:13}}>{log.roomId}호 {log.tenantName}</div>
+              <div style={{fontSize:11,color:'#22c55e'}}>{log.status} · {log.time}</div>
+            </div>
+            <div style={{background:'#FEE50011',borderRadius:7,padding:10,fontSize:12,color:'#cbd5e1',whiteSpace:'pre-line',lineHeight:1.7}}>{log.message}</div>
+          </div>)}
+        </>}
+      </div>}
+
+      {/* ━━━ 계약서 ━━━ */}
+      {page==='contracts'&&<div className="fi">
+        <h1 style={{fontSize:21,fontWeight:700,color:'#f8fafc',marginBottom:5}}>계약서 관리</h1>
+        <div style={{fontSize:12,color:'#64748b',marginBottom:14}}>PDF / 이미지 업로드 후 앱에서 바로 열람</div>
+        <div style={{display:'flex',flexDirection:'column',gap:9}}>
+          {tenants.map(t=><div key={t.id} style={{background:'#111827',border:'1px solid #1e2d3d',borderRadius:13,padding:'13px 14px'}}>
+            <div style={{display:'flex',alignItems:'center',gap:9,marginBottom:10}}>
+              <div style={{fontWeight:700,color:'#93c5fd',minWidth:40}}>{t.roomId}호</div>
+              <div style={{flex:1}}><div style={{fontWeight:600,fontSize:14}}>{t.name}</div><div style={{fontSize:11,color:'#64748b'}}>{t.moveIn} ~ {t.moveOut||'미정'}</div>{t.contractName&&<div style={{fontSize:10,color:'#475569',marginTop:1}}>📎 {t.contractName}</div>}</div>
+              {t.contractFile?<span className="tg" style={{background:'#22c55e22',color:'#22c55e'}}>등록 ✓</span>:<span className="tg" style={{background:'#1e2d3d',color:'#64748b'}}>미등록</span>}
+            </div>
+            <div style={{display:'flex',gap:7,flexWrap:'wrap'}}>
+              {t.contractFile?<>
+                <button className="ab" style={{background:'#22c55e',color:'#fff',padding:'10px 16px',fontWeight:600,fontSize:13}} onClick={()=>{setMd(t);setModal('viewContract');}}>📄 보기</button>
+                <button className="ab" style={{background:'#3b82f6',color:'#fff',padding:'10px 16px',fontWeight:600,fontSize:13}} onClick={()=>{const a=document.createElement('a');a.href=t.contractFile;a.download=t.contractName||`계약서_${t.name}.pdf`;a.click();}}>⬇ 다운</button>
+                <label style={{background:'#1a2332',color:'#94a3b8',padding:'10px 13px',borderRadius:10,fontSize:12,fontWeight:600,cursor:'pointer',border:'1px solid #2d3f53'}}>🔄 재업로드<input type="file" accept=".pdf,image/*" style={{display:'none'}} onChange={e=>{const f=e.target.files[0];if(f){const u=URL.createObjectURL(f);setTenants(prev=>prev.map(x=>x.id===t.id?{...x,contractFile:u,contractName:f.name}:x));showToast('재업로드 완료');}}}/></label>
+              </>:<label style={{background:'#1d4ed8',color:'#fff',padding:'12px 18px',borderRadius:10,fontSize:13,fontWeight:600,cursor:'pointer',display:'inline-flex',alignItems:'center',gap:7}}>📤 업로드<input type="file" accept=".pdf,image/*" style={{display:'none'}} onChange={e=>{const f=e.target.files[0];if(f){const u=URL.createObjectURL(f);setTenants(prev=>prev.map(x=>x.id===t.id?{...x,contractFile:u,contractName:f.name}:x));showToast(`${t.name} 업로드 완료`);}}}/></label>}
+            </div>
+          </div>)}
+        </div>
+      </div>}
+
+      {/* ━━━ 구매 리스트 ━━━ */}
+      {page==='shopping'&&<div className="fi">
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+          <h1 style={{fontSize:21,fontWeight:700,color:'#f8fafc'}}>구매 리스트</h1>
+          <div style={{fontSize:12,color:'#64748b'}}>{shopping.filter(s=>!s.done).length}개 남음 · {shopping.filter(s=>s.done).length}개 완료</div>
+        </div>
+        {/* 추가 폼 */}
+        <div style={{...CARD,marginBottom:14}}>
+          <div className="st">+ 항목 추가</div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
+            <input className="if" style={{fontSize:13}} placeholder="물품명 (예: 화장지 30롤)" value={newShop.name} onChange={e=>setNewShop(p=>({...p,name:e.target.value}))}/>
+            <select className="if" style={{fontSize:13}} value={newShop.category} onChange={e=>setNewShop(p=>({...p,category:e.target.value}))}>
+              {['소모품','청소용품','전기','가구','기타'].map(c=><option key={c}>{c}</option>)}
+            </select>
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:10}}>
+            <input className="if" style={{fontSize:13}} placeholder="수량 (예: 1박스)" value={newShop.qty} onChange={e=>setNewShop(p=>({...p,qty:e.target.value}))}/>
+            <input className="if" style={{fontSize:13}} placeholder="메모" value={newShop.memo} onChange={e=>setNewShop(p=>({...p,memo:e.target.value}))}/>
+          </div>
+          <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:10}}>
+            <label style={{display:'flex',alignItems:'center',gap:7,cursor:'pointer'}}>
+              <input type="checkbox" checked={newShop.urgent} onChange={e=>setNewShop(p=>({...p,urgent:e.target.checked}))} style={{width:17,height:17,accentColor:'#ef4444'}}/>
+              <span style={{fontSize:13,color:'#94a3b8'}}>긴급 구매 필요</span>
+            </label>
+          </div>
+          <button className="ab" style={{width:'100%',background:'#1d4ed8',color:'#fff',padding:'12px',fontSize:14,fontWeight:700}} onClick={()=>{
+            if(!newShop.name.trim()){showToast('물품명을 입력하세요','error');return;}
+            setShopping(prev=>[{id:Date.now(),...newShop,done:false},...prev]);
+            setNewShop({name:'',category:'소모품',qty:'',urgent:false,memo:''});showToast('추가 완료');
+          }}>추가하기</button>
+        </div>
+        {/* 미완료 목록 */}
+        {shopping.filter(s=>!s.done).length>0&&<div style={{marginBottom:14}}>
+          <div className="st">🛒 구매 필요 ({shopping.filter(s=>!s.done).length}개)</div>
+          {shopping.filter(s=>!s.done).sort((a,b)=>b.urgent-a.urgent).map(s=>(
+            <div key={s.id} style={{background:'#111827',border:`1px solid ${s.urgent?'#ef444433':'#1e2d3d'}`,borderRadius:13,padding:'13px 14px',marginBottom:7,display:'flex',alignItems:'center',gap:9}}>
+              <button onClick={()=>setShopping(prev=>prev.map(x=>x.id===s.id?{...x,done:true}:x))} style={{width:22,height:22,borderRadius:6,border:'2px solid #334155',background:'none',cursor:'pointer',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center'}}/>
+              <div style={{flex:1}}>
+                <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:3}}>
+                  {s.urgent&&<span className="tg" style={{background:'#ef444422',color:'#ef4444',fontSize:10}}>긴급</span>}
+                  <span className="tg" style={{background:(CC[s.category]||'#64748b')+'22',color:CC[s.category]||'#64748b',fontSize:10}}>{s.category}</span>
+                </div>
+                <div style={{fontWeight:600,fontSize:14,color:'#f1f5f9'}}>{s.name}</div>
+                <div style={{fontSize:11,color:'#64748b'}}>{s.qty&&`수량: ${s.qty}`}{s.memo&&` · ${s.memo}`}</div>
+              </div>
+              <button style={{background:'none',border:'none',cursor:'pointer',color:'#475569',fontSize:18,padding:'3px 6px',lineHeight:1}} onClick={()=>{setShopping(prev=>prev.filter(x=>x.id!==s.id));showToast('삭제');}}>×</button>
+            </div>
+          ))}
+        </div>}
+        {/* 완료 목록 */}
+        {shopping.filter(s=>s.done).length>0&&<div>
+          <div className="st">✅ 구매 완료 ({shopping.filter(s=>s.done).length}개)</div>
+          {shopping.filter(s=>s.done).map(s=>(
+            <div key={s.id} style={{background:'#111827',border:'1px solid #1e2d3d',borderRadius:13,padding:'11px 14px',marginBottom:6,display:'flex',alignItems:'center',gap:9,opacity:.6}}>
+              <div style={{width:22,height:22,borderRadius:6,background:'#22c55e',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                <span style={{color:'#fff',fontSize:13,lineHeight:1}}>✓</span>
+              </div>
+              <div style={{flex:1}}>
+                <div style={{fontWeight:600,fontSize:13,color:'#94a3b8',textDecoration:'line-through'}}>{s.name}</div>
+                <div style={{fontSize:11,color:'#64748b'}}>{s.qty}</div>
+              </div>
+              <button style={{background:'none',border:'none',cursor:'pointer',color:'#475569',fontSize:14,padding:'3px 6px'}} onClick={()=>{setShopping(prev=>prev.map(x=>x.id===s.id?{...x,done:false}:x));}}>↩</button>
+              <button style={{background:'none',border:'none',cursor:'pointer',color:'#475569',fontSize:18,padding:'3px 6px',lineHeight:1}} onClick={()=>{setShopping(prev=>prev.filter(x=>x.id!==s.id));showToast('삭제');}}>×</button>
+            </div>
+          ))}
+        </div>}
+      </div>}
+
+      {/* ━━━ 시설 관리 ━━━ */}
+      {page==='maintenance'&&<div className="fi">
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+          <h1 style={{fontSize:21,fontWeight:700,color:'#f8fafc'}}>시설 관리</h1>
+          <button className="ab" style={{background:'#1d4ed8',color:'#fff',padding:'10px 16px',fontWeight:600,fontSize:13}} onClick={()=>setModal('am')}>+ 추가</button>
+        </div>
+        {maint.map(item=>{const pc={높음:'#ef4444',보통:'#f59e0b',낮음:'#22c55e'};const sc2={대기:'#ef4444',처리중:'#f59e0b',완료:'#22c55e'};return(
+          <div key={item.id} style={{background:'#111827',border:`1px solid ${item.status!=='완료'?'#2d3f53':'#1e2d3d'}`,borderRadius:13,padding:'13px 14px',marginBottom:7,opacity:item.status==='완료'?.55:1}}>
+            <div style={{display:'flex',alignItems:'center',gap:7,marginBottom:7,flexWrap:'wrap'}}>
+              <span className="tg" style={{background:pc[item.priority]+'22',color:pc[item.priority]}}>{item.priority}</span>
+              <div style={{fontWeight:700,color:'#93c5fd'}}>{item.roomId}호</div>
+              <div style={{fontWeight:600,flex:1,color:'#f1f5f9',minWidth:80,fontSize:14}}>{item.content}</div>
+              <span className="tg" style={{background:sc2[item.status]+'22',color:sc2[item.status]}}>{item.status}</span>
+            </div>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+              <div style={{fontSize:11,color:'#64748b'}}>{item.category} · {item.reportDate}</div>
+              {item.status!=='완료'&&<button className="ab" style={{background:'#22c55e',color:'#fff',padding:'7px 14px',fontSize:12,fontWeight:600}} onClick={()=>setMaint(prev=>prev.map(m=>m.id===item.id?{...m,status:m.status==='대기'?'처리중':'완료'}:m))}>{item.status==='대기'?'처리 시작':'완료'}</button>}
+            </div>
+          </div>
+        );})}
+      </div>}
+
+      {/* ━━━ 공지사항 ━━━ */}
+      {page==='notices'&&<div className="fi">
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+          <h1 style={{fontSize:21,fontWeight:700,color:'#f8fafc'}}>공지사항</h1>
+          <button className="ab" style={{background:'#1d4ed8',color:'#fff',padding:'10px 16px',fontWeight:600,fontSize:13}} onClick={()=>setModal('an')}>+ 작성</button>
+        </div>
+        {notices.map(n=><div key={n.id} style={{background:'#111827',border:`1px solid ${n.important?'#ef444444':'#1e2d3d'}`,borderRadius:13,padding:'14px',marginBottom:9}}>
+          <div style={{display:'flex',alignItems:'center',gap:7,marginBottom:7,flexWrap:'wrap'}}>
+            {n.important&&<span className="tg" style={{background:'#ef444422',color:'#ef4444'}}>중요</span>}
+            <div style={{fontWeight:700,fontSize:14,color:'#f1f5f9',flex:1}}>{n.title}</div>
+            <div style={{fontSize:11,color:'#64748b',flexShrink:0}}>{n.date}</div>
+          </div>
+          <div style={{fontSize:13,color:'#94a3b8',lineHeight:1.7}}>{n.content}</div>
+        </div>)}
+      </div>}
+    </div>
+
+    {/* ═══ 모달: 방 수정 ═══ */}
+    {modal==='editRoom'&&md&&<div className="moov" onClick={()=>setModal(null)}>
+      <div className="mobox" onClick={e=>e.stopPropagation()}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:18}}>
+          <div style={{fontSize:17,fontWeight:700}}>🏠 {md.id}호 수정</div>
+          <button onClick={()=>setModal(null)} style={{background:'none',border:'none',color:'#64748b',fontSize:24,cursor:'pointer',lineHeight:1,padding:'4px 8px'}}>×</button>
+        </div>
+        <div style={{display:'flex',flexDirection:'column',gap:13}}>
+          <div><label style={LB}>방 상태</label>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:7}}>
+              {Object.entries(SL).map(([k,v])=><button key={k} className="ab" style={{padding:'12px',fontSize:13,fontWeight:600,background:md.status===k?SC[k]:'#1a2332',color:md.status===k?'#fff':'#94a3b8',border:`1px solid ${SC[k]}44`}} onClick={()=>setMd(p=>({...p,status:k}))}>{v}</button>)}
+            </div>
+          </div>
+          <div><label style={LB}>타입</label><select className="if" value={md.type} onChange={e=>setMd(p=>({...p,type:e.target.value}))}><option value="single">싱글룸</option><option value="double">더블룸</option></select></div>
+          <div><label style={LB}>크기</label><input className="if" value={md.size} onChange={e=>setMd(p=>({...p,size:e.target.value}))} placeholder="예: 7평"/></div>
+          <div><label style={LB}>월세 (원)</label><input className="if" type="number" value={md.monthlyRent} onChange={e=>setMd(p=>({...p,monthlyRent:e.target.value}))}/></div>
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:9,marginTop:18}}>
+          <button className="ab" style={{background:'#1a2332',color:'#94a3b8',border:'1px solid #2d3f53',padding:'13px',fontSize:14}} onClick={()=>setModal(null)}>취소</button>
+          <button className="ab" style={{background:'#1d4ed8',color:'#fff',padding:'13px',fontSize:14,fontWeight:700}} onClick={saveRoom}>저장</button>
+        </div>
+      </div>
+    </div>}
+
+    {/* ═══ 모달: 입주자 수정/추가 ═══ */}
+    {modal==='editTenant'&&md&&<div className="moov" onClick={()=>setModal(null)}>
+      <div className="mobox" onClick={e=>e.stopPropagation()}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:18}}>
+          <div style={{fontSize:17,fontWeight:700}}>👤 {md.name||'신규 입주자'}</div>
+          <button onClick={()=>setModal(null)} style={{background:'none',border:'none',color:'#64748b',fontSize:24,cursor:'pointer',lineHeight:1,padding:'4px 8px'}}>×</button>
+        </div>
+        <div style={{display:'flex',flexDirection:'column',gap:13}}>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:9}}>
+            <div><label style={LB}>이름</label><input className="if" value={md.name} onChange={e=>setMd(p=>({...p,name:e.target.value}))} placeholder="이름"/></div>
+            <div><label style={LB}>연락처</label><input className="if" value={md.phone||''} onChange={e=>setMd(p=>({...p,phone:e.target.value}))} placeholder="010-0000-0000"/></div>
+          </div>
+          <div><label style={LB}>방 호수</label>
+            <select className="if" value={md.roomId||''} onChange={e=>setMd(p=>({...p,roomId:e.target.value}))}>
+              <option value="">선택</option>
+              {rooms.map(r=><option key={r.id} value={r.id}>{r.id}호 ({SL[r.status]}) — {fmtW(r.monthlyRent)}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={LB}>거주 단위</label>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:7,marginBottom:9}}>
+              {[['월','월세'],['일','일세'],['주','주세']].map(([k,v])=><button key={k} className="ab" style={{padding:'11px',fontSize:13,fontWeight:600,background:md.stayType===k?'#8b5cf6':'#1a2332',color:md.stayType===k?'#fff':'#94a3b8',border:'1px solid #2d3f5344'}} onClick={()=>setMd(p=>({...p,stayType:k}))}>{v}</button>)}
+            </div>
+            {md.stayType!=='월'&&<div><label style={LB}>{md.stayType}당 요금 (원)</label><input className="if" type="number" value={md.dailyRate||''} onChange={e=>setMd(p=>({...p,dailyRate:e.target.value}))} placeholder={`${md.stayType}당 금액`}/><div style={{fontSize:11,color:'#8b5cf6',marginTop:4}}>{md.stayType==='일'?'1일 기준 요금':'7일(1주) 기준 요금'}</div></div>}
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:9}}>
+            <div><label style={LB}>입주일 (또는 예약 입실일)</label><input className="if" type="date" value={md.moveIn||''} onChange={e=>setMd(p=>({...p,moveIn:e.target.value,reserveDate:e.target.value}))}/></div>
+            <div><label style={LB}>계약 만료일</label><input className="if" type="date" value={md.moveOut||''} onChange={e=>setMd(p=>({...p,moveOut:e.target.value}))}/></div>
+          </div>
+          {md.moveOut&&<div>
+            <label style={LB}>계약기간 빠른 조정</label>
+            <div style={{display:'flex',gap:7,flexWrap:'wrap'}}>
+              {[{l:'+1개월',m:1},{l:'+3개월',m:3},{l:'+6개월',m:6},{l:'+1년',m:12},{l:'-1개월',m:-1},{l:'-3개월',m:-3}].map(btn=>(
+                <button key={btn.l} className="ab" style={{background:btn.m>0?'#1d4ed822':'#ef444422',color:btn.m>0?'#93c5fd':'#ef4444',padding:'8px 12px',fontSize:12,border:`1px solid ${btn.m>0?'#1d4ed844':'#ef444433'}`}} onClick={()=>{const d=new Date(md.moveOut);d.setMonth(d.getMonth()+btn.m);setMd(p=>({...p,moveOut:fmt(d)}));}}>{btn.l}</button>
+              ))}
+            </div>
+            <div style={{fontSize:11,color:'#64748b',marginTop:5}}>만료일: <strong style={{color:'#e2e8f0'}}>{md.moveOut}</strong></div>
+          </div>}
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:9}}>
+            <div><label style={LB}>납부일 (매월 몇일)</label><input className="if" type="number" min="1" max="31" value={md.payDay} onChange={e=>setMd(p=>({...p,payDay:e.target.value}))}/></div>
+            <div><label style={LB}>보증금 (원)</label><input className="if" type="number" value={md.deposit||''} onChange={e=>setMd(p=>({...p,deposit:e.target.value}))}/></div>
+          </div>
+          <div><label style={LB}>메모</label><textarea className="if" rows={2} value={md.memo||''} onChange={e=>setMd(p=>({...p,memo:e.target.value}))} placeholder="특이사항" style={{resize:'none'}}/></div>
+          <div><label style={LB}>이달 납부 상태</label>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:7}}>
+              <button className="ab" style={{padding:'12px',fontSize:13,fontWeight:600,background:!md.paid?'#ef4444':'#1a2332',color:!md.paid?'#fff':'#94a3b8',border:'1px solid #ef444433'}} onClick={()=>setMd(p=>({...p,paid:false,paidDate:null}))}>미납</button>
+              <button className="ab" style={{padding:'12px',fontSize:13,fontWeight:600,background:md.paid?'#22c55e':'#1a2332',color:md.paid?'#fff':'#94a3b8',border:'1px solid #22c55e33'}} onClick={()=>setMd(p=>({...p,paid:true,paidDate:p.paidDate||fmt(today)}))}>납부완료</button>
+            </div>
+          </div>
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:9,marginTop:18}}>
+          <button className="ab" style={{background:'#1a2332',color:'#94a3b8',border:'1px solid #2d3f53',padding:'13px',fontSize:14}} onClick={()=>setModal(null)}>취소</button>
+          <button className="ab" style={{background:'#1d4ed8',color:'#fff',padding:'13px',fontSize:14,fontWeight:700}} onClick={()=>{if(!md.name||!md.roomId){showToast('이름과 방을 선택하세요','error');return;}saveTenant();}}>저장</button>
+        </div>
+      </div>
+    </div>}
+
+    {/* ═══ 모달: 계약서 보기 ═══ */}
+    {modal==='viewContract'&&md&&<div className="moov" onClick={()=>setModal(null)}>
+      <div className="mobox" style={{maxWidth:680,height:'92vh',display:'flex',flexDirection:'column'}} onClick={e=>e.stopPropagation()}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:11,flexShrink:0}}>
+          <div><div style={{fontSize:15,fontWeight:700}}>{md.name} 계약서</div><div style={{fontSize:11,color:'#64748b'}}>{md.contractName}</div></div>
+          <div style={{display:'flex',gap:7,alignItems:'center'}}>
+            <button className="ab" style={{background:'#3b82f6',color:'#fff',padding:'8px 14px',fontSize:12}} onClick={()=>window.open(md.contractFile,'_blank')}>새 탭으로 열기</button>
+            <button onClick={()=>setModal(null)} style={{background:'none',border:'none',color:'#64748b',fontSize:24,cursor:'pointer',lineHeight:1,padding:'4px 8px'}}>×</button>
+          </div>
+        </div>
+        <div style={{flex:1,borderRadius:11,overflow:'hidden',background:'#0d1117',minHeight:0}}>
+          {md.contractFile&&(md.contractName?.toLowerCase().match(/\.pdf$/)?<iframe src={md.contractFile} style={{width:'100%',height:'100%',border:'none'}} title="계약서"/>:<img src={md.contractFile} style={{width:'100%',height:'100%',objectFit:'contain'}} alt="계약서"/>)}
+        </div>
+      </div>
+    </div>}
+
+    {/* ═══ 모달: 공지 ═══ */}
+    {modal==='an'&&<div className="moov" onClick={()=>setModal(null)}>
+      <div className="mobox" onClick={e=>e.stopPropagation()}>
+        <div style={{fontSize:17,fontWeight:700,marginBottom:16}}>공지사항 작성</div>
+        <div style={{display:'flex',flexDirection:'column',gap:11}}>
+          <input className="if" id="nt" placeholder="제목"/>
+          <textarea className="if" id="nc" placeholder="내용" rows={4} style={{resize:'none'}}/>
+          <label style={{display:'flex',alignItems:'center',gap:9,cursor:'pointer',padding:'3px 0'}}><input type="checkbox" id="ni" style={{width:17,height:17}}/><span style={{fontSize:13,color:'#94a3b8'}}>중요 공지</span></label>
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:9,marginTop:16}}>
+          <button className="ab" style={{background:'#1a2332',color:'#94a3b8',border:'1px solid #2d3f53',padding:'13px',fontSize:14}} onClick={()=>setModal(null)}>취소</button>
+          <button className="ab" style={{background:'#1d4ed8',color:'#fff',padding:'13px',fontSize:14,fontWeight:700}} onClick={()=>{const t=document.getElementById('nt').value,c=document.getElementById('nc').value,i=document.getElementById('ni').checked;if(!t||!c)return;setNotices(prev=>[{id:Date.now(),title:t,content:c,important:i,date:fmt(today)},...prev]);showToast('공지 등록');setModal(null);}}>등록</button>
+        </div>
+      </div>
+    </div>}
+
+    {/* ═══ 모달: 시설 추가 ═══ */}
+    {modal==='am'&&<div className="moov" onClick={()=>setModal(null)}>
+      <div className="mobox" onClick={e=>e.stopPropagation()}>
+        <div style={{fontSize:17,fontWeight:700,marginBottom:16}}>시설 관리 항목 추가</div>
+        <div style={{display:'flex',flexDirection:'column',gap:11}}>
+          <select className="if" id="mr"><option value="">방 선택</option>{rooms.map(r=><option key={r.id} value={r.id}>{r.id}호</option>)}</select>
+          <select className="if" id="mc"><option>전기</option><option>배관</option><option>가구</option><option>도어락</option><option>기타</option></select>
+          <input className="if" id="mco" placeholder="내용"/>
+          <select className="if" id="mp"><option>높음</option><option>보통</option><option>낮음</option></select>
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:9,marginTop:16}}>
+          <button className="ab" style={{background:'#1a2332',color:'#94a3b8',border:'1px solid #2d3f53',padding:'13px',fontSize:14}} onClick={()=>setModal(null)}>취소</button>
+          <button className="ab" style={{background:'#1d4ed8',color:'#fff',padding:'13px',fontSize:14,fontWeight:700}} onClick={()=>{const r=parseInt(document.getElementById('mr').value),c=document.getElementById('mco').value;if(!r||!c)return;setMaint(prev=>[{id:Date.now(),roomId:r,category:document.getElementById('mc').value,content:c,priority:document.getElementById('mp').value,reportDate:fmt(today),status:'대기'},...prev]);showToast('항목 추가');setModal(null);}}>추가</button>
+        </div>
+      </div>
+    </div>}
+
+    {/* Toast */}
+    {toast&&<div style={{position:'fixed',bottom:26,left:'50%',transform:'translateX(-50%)',background:toast.type==='success'?'#22c55e':'#ef4444',color:'#fff',padding:'12px 20px',borderRadius:40,fontWeight:600,fontSize:14,zIndex:9999,boxShadow:'0 8px 32px rgba(0,0,0,.5)',whiteSpace:'nowrap',pointerEvents:'none'}}>
+      {toast.msg}
+    </div>}
+  </div>;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
