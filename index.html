@@ -384,6 +384,7 @@ function App(){
   const [tenantSearch,setTenantSearch]=useState('');
   const [tenantFilter,setTenantFilter]=useState('all');  // all/unpaid/expiring
   const [bulkSmsModal,setBulkSmsModal]=useState(false);
+  const [smsModal,setSmsModal]=useState(null); // {phones, msg, title}
 
   const showToast=(msg,type='success')=>{setToast({msg,type});setTimeout(()=>setToast(null),3000);};
   const getRoomT=rid=>tenants.find(t=>t.roomId===rid);
@@ -1417,9 +1418,15 @@ function App(){
 
       {/* ━━━ 공지사항 ━━━ */}
       {page==='notices'&&<div className="fi">
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
           <h1 style={{fontSize:21,fontWeight:700,color:'#f8fafc'}}>공지사항</h1>
-          <button className="ab" style={{background:'#1d4ed8',color:'#fff',padding:'10px 16px',fontWeight:600,fontSize:13}} onClick={()=>setModal('an')}>+ 작성</button>
+          <div style={{display:'flex',gap:8}}>
+            <button className="ab kb" style={{padding:'10px 14px',fontWeight:700,fontSize:13,borderRadius:20}} onClick={()=>{
+              const allPhones=tenants.filter(t=>rooms.find(r=>r.id===t.roomId)?.status==='occupied').map(t=>(t.phone||'').replace(/-/g,'')).filter(Boolean);
+              setSmsModal({phones:allPhones,msg:'',title:'전체 입주자 문자 발송'});
+            }}>💬 전체 문자</button>
+            <button className="ab" style={{background:'#1d4ed8',color:'#fff',padding:'10px 16px',fontWeight:600,fontSize:13}} onClick={()=>setModal('an')}>+ 작성</button>
+          </div>
         </div>
         {notices.map(n=><div key={n.id} style={{background:'#111827',border:`1px solid ${n.important?'#ef444444':'#1e2d3d'}`,borderRadius:13,padding:'14px',marginBottom:9}}>
           <div style={{display:'flex',alignItems:'center',gap:7,marginBottom:7,flexWrap:'wrap'}}>
@@ -1427,7 +1434,12 @@ function App(){
             <div style={{fontWeight:700,fontSize:14,color:'#f1f5f9',flex:1}}>{n.title}</div>
             <div style={{fontSize:11,color:'#64748b',flexShrink:0}}>{n.date}</div>
           </div>
-          <div style={{fontSize:13,color:'#94a3b8',lineHeight:1.7}}>{n.content}</div>
+          <div style={{fontSize:13,color:'#94a3b8',lineHeight:1.7,marginBottom:10}}>{n.content}</div>
+          <button className="ab" style={{background:'#FEE50022',color:'#FEE500',border:'1px solid #FEE50033',padding:'8px 14px',fontSize:12,fontWeight:600}} onClick={()=>{
+            const allPhones=tenants.filter(t=>rooms.find(r=>r.id===t.roomId)?.status==='occupied').map(t=>(t.phone||'').replace(/-/g,'')).filter(Boolean);
+            setSmsModal({phones:allPhones,msg:`[고시원 공지] ${n.title}
+${n.content}`,title:`공지 문자 발송 — ${n.title}`});
+          }}>💬 이 공지 전체 문자 발송</button>
         </div>)}
       </div>}
     </div>
@@ -1541,9 +1553,23 @@ function App(){
           <textarea className="if" id="nc" placeholder="내용" rows={4} style={{resize:'none'}}/>
           <label style={{display:'flex',alignItems:'center',gap:9,cursor:'pointer',padding:'3px 0'}}><input type="checkbox" id="ni" style={{width:17,height:17}}/><span style={{fontSize:13,color:'#94a3b8'}}>중요 공지</span></label>
         </div>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:9,marginTop:16}}>
-          <button className="ab" style={{background:'#1a2332',color:'#94a3b8',border:'1px solid #2d3f53',padding:'13px',fontSize:14}} onClick={()=>setModal(null)}>취소</button>
-          <button className="ab" style={{background:'#1d4ed8',color:'#fff',padding:'13px',fontSize:14,fontWeight:700}} onClick={()=>{const t=document.getElementById('nt').value,c=document.getElementById('nc').value,i=document.getElementById('ni').checked;if(!t||!c)return;syncNotices([{id:Date.now(),title:t,content:c,important:i,date:fmt(today)},...notices]);showToast('공지 등록');setModal(null);}}>등록</button>
+        <div style={{display:'flex',flexDirection:'column',gap:8,marginTop:16}}>
+          <button className="ab" style={{background:'#1d4ed8',color:'#fff',padding:'13px',fontSize:14,fontWeight:700}} onClick={()=>{
+            const t=document.getElementById('nt').value,c=document.getElementById('nc').value,i=document.getElementById('ni').checked;
+            if(!t||!c)return;
+            syncNotices([{id:Date.now(),title:t,content:c,important:i,date:fmt(today)},...notices]);
+            showToast('공지 등록');setModal(null);
+          }}>등록</button>
+          <button className="ab" style={{background:'#FEE50022',color:'#FEE500',border:'1px solid #FEE50033',padding:'13px',fontSize:14,fontWeight:700}} onClick={()=>{
+            const t=document.getElementById('nt').value,c=document.getElementById('nc').value,i=document.getElementById('ni').checked;
+            if(!t||!c)return;
+            syncNotices([{id:Date.now(),title:t,content:c,important:i,date:fmt(today)},...notices]);
+            const allPhones=tenants.filter(t2=>rooms.find(r=>r.id===t2.roomId)?.status==='occupied').map(t2=>(t2.phone||'').replace(/-/g,'')).filter(Boolean);
+            setSmsModal({phones:allPhones,msg:`[고시원 공지] ${t}
+${c}`,title:`공지 문자 발송 — ${t}`});
+            setModal(null);
+          }}>등록 + 바로 문자 발송 💬</button>
+          <button className="ab" style={{background:'#1a2332',color:'#94a3b8',border:'1px solid #2d3f53',padding:'11px',fontSize:13}} onClick={()=>setModal(null)}>취소</button>
         </div>
       </div>
     </div>}
@@ -1561,6 +1587,49 @@ function App(){
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:9,marginTop:16}}>
           <button className="ab" style={{background:'#1a2332',color:'#94a3b8',border:'1px solid #2d3f53',padding:'13px',fontSize:14}} onClick={()=>setModal(null)}>취소</button>
           <button className="ab" style={{background:'#1d4ed8',color:'#fff',padding:'13px',fontSize:14,fontWeight:700}} onClick={()=>{const r=parseInt(document.getElementById('mr').value),c=document.getElementById('mco').value;if(!r||!c)return;syncMaint([{id:Date.now(),roomId:r,category:document.getElementById('mc').value,content:c,priority:document.getElementById('mp').value,reportDate:fmt(today),status:'대기'},...maint]);showToast('항목 추가');setModal(null);}}>추가</button>
+        </div>
+      </div>
+    </div>}
+
+    {/* ═══ 모달: 문자 발송 (범용) ═══ */}
+    {smsModal&&<div className="moov" onClick={()=>setSmsModal(null)}>
+      <div className="mobox" onClick={e=>e.stopPropagation()}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+          <div style={{fontSize:16,fontWeight:700}}>{smsModal.title}</div>
+          <button onClick={()=>setSmsModal(null)} style={{background:'none',border:'none',color:'#64748b',fontSize:24,cursor:'pointer',lineHeight:1,padding:'4px 8px'}}>×</button>
+        </div>
+        {/* 수신자 */}
+        <div style={{marginBottom:12}}>
+          <div style={{fontSize:12,fontWeight:700,color:'#64748b',marginBottom:6}}>수신자 ({smsModal.phones.length}명)</div>
+          <div style={{background:'#0d1117',borderRadius:10,padding:'10px 12px',fontSize:12,color:'#64748b',lineHeight:1.7,wordBreak:'break-all'}}>
+            {smsModal.phones.map((p,i)=><span key={i}>{p}{i<smsModal.phones.length-1?', ':''}</span>)}
+          </div>
+        </div>
+        {/* 메시지 내용 - 편집 가능 */}
+        <div style={{marginBottom:14}}>
+          <div style={{fontSize:12,fontWeight:700,color:'#64748b',marginBottom:6}}>메시지 내용 (수정 가능)</div>
+          <textarea className="if" rows={5} style={{resize:'vertical',fontSize:13,lineHeight:1.7}}
+            value={smsModal.msg}
+            onChange={e=>setSmsModal(p=>({...p,msg:e.target.value}))}
+            placeholder="발송할 메시지를 입력하세요"
+          />
+        </div>
+        {/* 발송 버튼 */}
+        {(()=>{
+          const phones=smsModal.phones.join(',');
+          const encoded=encodeURIComponent(smsModal.msg);
+          const isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent);
+          const smsUrl=isIOS?`sms:${phones}&body=${encoded}`:`sms:${phones}?body=${encoded}`;
+          return (
+            <a href={smsUrl}
+              style={{display:'block',background:'#FEE500',color:'#3C1E1E',padding:'14px',borderRadius:12,fontWeight:700,fontSize:15,textDecoration:'none',textAlign:'center',marginBottom:8}}
+              onClick={()=>{showToast(`${smsModal.phones.length}명에게 문자앱 열기 완료`);setSmsModal(null);}}>
+              📱 {smsModal.phones.length}명에게 문자 발송
+            </a>
+          );
+        })()}
+        <div style={{fontSize:11,color:'#475569',textAlign:'center',lineHeight:1.6}}>
+          문자앱이 열리면 수신자가 자동 입력돼요 · 보내기만 누르세요
         </div>
       </div>
     </div>}
@@ -1591,31 +1660,70 @@ function App(){
                 [고시원 납부 안내] 이번 달 월세 납부일이 됐습니다. 미납 시 연체료가 발생할 수 있습니다. 계좌: 국민 123-456-789
               </div>
             </div>
-            {/* 전체 발송 버튼 - 번호 콤마로 합치기 */}
+            {/* 전체 발송 - iOS/Android 분기 */}
             {(()=>{
-              const phones=needsK.map(t=>(t.phone||'').replace(/-/g,'')).filter(Boolean).join(',');
               const msg='[고시원 납부 안내] 이번 달 월세 납부일이 됐습니다. 미납 시 연체료가 발생할 수 있습니다. 계좌: 국민 123-456-789';
-              const encoded=encodeURIComponent(msg);
+              const phones=needsK.map(t=>(t.phone||'').replace(/-/g,'')).filter(Boolean);
+              const phonesDisplay=needsK.map(t=>t.phone||'').filter(Boolean).join(', ');
               const isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent);
-              const smsUrl=isIOS?`sms:${phones}&body=${encoded}`:`sms:${phones}?body=${encoded}`;
+              const encoded=encodeURIComponent(msg);
+
+              const handleSend=()=>{
+                // 번호 클립보드 복사
+                if(navigator.clipboard){
+                  navigator.clipboard.writeText(phones.join(isIOS?'
+':','));
+                }
+                needsK.forEach(t=>{
+                  const room=rooms.find(r=>r.id===t.roomId);
+                  setKlog(prev=>[{id:Date.now()+t.id,tenantName:t.name,roomId:room?.id,message:msg,time:new Date().toLocaleTimeString('ko-KR'),status:'📱 문자앱 열림'},...prev]);
+                });
+                setBulkSmsModal(false);
+                showToast('번호 복사 완료! 문자앱에서 붙여넣기 하세요');
+                // 문자앱 열기 (메시지만 입력)
+                setTimeout(()=>{ window.location.href=`sms:&body=${encoded}`; }, 400);
+              };
+
               return (
-                <a href={smsUrl}
-                  style={{display:'block',background:'#FEE500',color:'#3C1E1E',padding:'14px',borderRadius:12,fontWeight:700,fontSize:15,textDecoration:'none',textAlign:'center'}}
-                  onClick={()=>{
-                    needsK.forEach(t=>{
-                      const room=rooms.find(r=>r.id===t.roomId);
-                      setKlog(prev=>[{id:Date.now()+t.id,tenantName:t.name,roomId:room?.id,message:msg,time:new Date().toLocaleTimeString('ko-KR'),status:'📱 전체 문자앱 열림'},...prev]);
-                    });
-                    setBulkSmsModal(false);
-                    showToast(`${needsK.length}명에게 문자앱 열기 완료`);
-                  }}>
-                  📱 {needsK.length}명 한번에 문자 발송
-                </a>
+                <div>
+                  {/* 번호 표시 */}
+                  <div style={{background:'#0d1117',borderRadius:10,padding:'10px 14px',marginBottom:10,display:'flex',alignItems:'center',gap:10}}>
+                    <div style={{flex:1,fontSize:12,color:'#93c5fd',lineHeight:1.7,wordBreak:'break-all'}}>{phonesDisplay}</div>
+                    <button className="ab" style={{background:'#1a2332',color:'#94a3b8',border:'1px solid #2d3f53',padding:'7px 12px',fontSize:12,flexShrink:0}}
+                      onClick={()=>{
+                        if(navigator.clipboard) navigator.clipboard.writeText(phones.join(isIOS?'
+':','));
+                        showToast('번호 복사됨!');
+                      }}>복사</button>
+                  </div>
+
+                  {isIOS
+                    /* ── 아이폰: 2단계 안내 ── */
+                    ?<div>
+                      <div style={{background:'#f59e0b11',border:'1px solid #f59e0b33',borderRadius:10,padding:'10px 14px',marginBottom:10,fontSize:12,color:'#f59e0b',lineHeight:1.8}}>
+                        📱 <strong>아이폰 발송 방법</strong><br/>
+                        ① 아래 버튼 → 번호 자동 복사 + 문자앱 열림<br/>
+                        ② 받는 사람 칸 길게 누르기 → <strong>붙여넣기</strong><br/>
+                        ③ 내용 확인 후 보내기
+                      </div>
+                      <button className="ab" style={{width:'100%',background:'#FEE500',color:'#3C1E1E',padding:'14px',fontSize:15,fontWeight:700}}
+                        onClick={handleSend}>
+                        📋 번호 복사 + 문자앱 열기
+                      </button>
+                    </div>
+                    /* ── 안드로이드: 바로 발송 ── */
+                    :<a href={`sms:${phones.join(',')}?body=${encoded}`}
+                      style={{display:'block',background:'#FEE500',color:'#3C1E1E',padding:'14px',borderRadius:12,fontWeight:700,fontSize:15,textDecoration:'none',textAlign:'center'}}
+                      onClick={()=>{
+                        needsK.forEach(t=>{const room=rooms.find(r=>r.id===t.roomId);setKlog(prev=>[{id:Date.now()+t.id,tenantName:t.name,roomId:room?.id,message:msg,time:new Date().toLocaleTimeString('ko-KR'),status:'📱 문자앱 열림'},...prev]);});
+                        setBulkSmsModal(false);showToast(`${needsK.length}명 문자앱 열기 완료`);
+                      }}>
+                      📱 {needsK.length}명 한번에 문자 발송
+                    </a>
+                  }
+                </div>
               );
             })()}
-            <div style={{fontSize:11,color:'#475569',textAlign:'center',marginTop:8,lineHeight:1.6}}>
-              문자앱이 열리면 수신자가 자동으로 입력돼요<br/>내용 확인 후 보내기만 누르세요
-            </div>
           </div>
         }
       </div>
