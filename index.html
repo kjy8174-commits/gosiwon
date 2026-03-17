@@ -1038,7 +1038,7 @@ function App(){
           {tenants.filter(t=>{
             const matchS=!tenantSearch||t.name.includes(tenantSearch)||(t.phone||'').includes(tenantSearch)||String(t.roomId).includes(tenantSearch);
             const room=rooms.find(r=>r.id===t.roomId);
-                        const dLeft=t.moveOut?diffDays(t.moveOut,todayStr):null;
+            const dLeft=t.moveOut?diffDays(t.moveOut,todayStr):null;
             if(tenantFilter==='unpaid') return matchS&&!t.paid&&room?.status==='occupied';
             if(tenantFilter==='expiring') return matchS&&dLeft!==null&&dLeft>=0&&dLeft<=30;
             if(tenantFilter==='reserved') return matchS&&room?.status==='reserved';
@@ -1568,42 +1568,56 @@ function App(){
     {/* ═══ 모달: 전체 문자 발송 ═══ */}
     {bulkSmsModal&&<div className="moov" onClick={()=>setBulkSmsModal(false)}>
       <div className="mobox" onClick={e=>e.stopPropagation()}>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
           <div style={{fontSize:17,fontWeight:700}}>💬 전체 문자 발송 ({needsK.length}명)</div>
           <button onClick={()=>setBulkSmsModal(false)} style={{background:'none',border:'none',color:'#64748b',fontSize:24,cursor:'pointer',lineHeight:1,padding:'4px 8px'}}>×</button>
         </div>
-        <div style={{fontSize:13,color:'#94a3b8',marginBottom:14,lineHeight:1.7}}>
-          각 버튼을 눌러 한 명씩 문자를 보내세요.<br/>
-          <span style={{color:'#f59e0b'}}>⚠️ 버튼을 누르면 문자앱이 열립니다 → 보내기 후 뒤로가기 → 다음 사람</span>
-        </div>
-        <div style={{display:'flex',flexDirection:'column',gap:8}}>
-          {needsK.map(t=>{
-            const room=rooms.find(r=>r.id===t.roomId);
-            const s=getPS(t);
-            const mt=s.urgency===3?'overdue':s.urgency===2?'today':'remind';
-            const msgs={
-              remind:`[고시원 납부 안내] 안녕하세요 ${t.name}님! ${room?.id}호 ${rentLabel(t,room)} 납부일이 ${Math.abs(new Date().getDate()-t.payDay)}일 남았습니다. 계좌: 국민 123-456-789 감사합니다`,
-              today:`[고시원 납부 안내] ${t.name}님, 오늘이 납부일입니다! ${room?.id}호 납부 부탁드립니다. 계좌: 국민 123-456-789`,
-              overdue:`[고시원 납부 알림] ${t.name}님, ${s.label} 상태입니다. 빠른 납부 부탁드립니다. 문의: 010-XXXX-XXXX`,
-            };
-            const phone=(t.phone||'').replace(/-/g,'');
-            const encoded=encodeURIComponent(msgs[mt]);
-            const isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent);
-            const smsUrl=isIOS?`sms:${phone}&body=${encoded}`:`sms:${phone}?body=${encoded}`;
-            return (
-              <div key={t.id} style={{background:'#0d1117',borderRadius:12,padding:'12px 14px',display:'flex',alignItems:'center',gap:10}}>
-                <div style={{flex:1}}>
-                  <div style={{fontWeight:600,fontSize:14}}>{t.name} <span style={{color:'#64748b',fontSize:12}}>{t.roomId}호</span></div>
-                  <div style={{fontSize:11,color:s.color}}>{s.label} · {t.phone}</div>
+        {needsK.length===0
+          ?<div style={{textAlign:'center',color:'#64748b',padding:'24px 0'}}>발송 대상 없음 ✓</div>
+          :<div>
+            {/* 발송 대상 목록 */}
+            <div style={{background:'#0d1117',borderRadius:12,padding:'10px 14px',marginBottom:14}}>
+              {needsK.map((t,i)=>{const s=getPS(t);return(
+                <div key={t.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'7px 0',borderBottom:i<needsK.length-1?'1px solid #1e2d3d':'none'}}>
+                  <div><div style={{fontSize:13,fontWeight:600}}>{t.name} <span style={{color:'#64748b',fontSize:11}}>{t.roomId}호</span></div><div style={{fontSize:11,color:s.color}}>{s.label}</div></div>
+                  <div style={{fontSize:12,color:'#64748b'}}>{t.phone}</div>
                 </div>
-                <a href={smsUrl} style={{background:'#FEE500',color:'#3C1E1E',padding:'9px 16px',borderRadius:10,fontWeight:700,fontSize:13,textDecoration:'none',flexShrink:0}} onClick={()=>{setKlog(prev=>[{id:Date.now(),tenantName:t.name,roomId:room?.id,message:msgs[mt],time:new Date().toLocaleTimeString('ko-KR'),status:'📱 문자앱 열림'},...prev]);}}>
-                  문자 발송
-                </a>
+              );})}
+            </div>
+            {/* 메시지 내용 */}
+            <div style={{background:'#0d1117',borderRadius:12,padding:'12px 14px',marginBottom:14}}>
+              <div style={{fontSize:11,fontWeight:700,color:'#64748b',marginBottom:6}}>발송될 메시지 (공통)</div>
+              <div style={{fontSize:13,color:'#cbd5e1',lineHeight:1.7}}>
+                [고시원 납부 안내] 이번 달 월세 납부일이 됐습니다. 미납 시 연체료가 발생할 수 있습니다. 계좌: 국민 123-456-789
               </div>
-            );
-          })}
-        </div>
-        {needsK.length===0&&<div style={{textAlign:'center',color:'#64748b',padding:'24px 0'}}>발송 대상 없음 ✓</div>}
+            </div>
+            {/* 전체 발송 버튼 - 번호 콤마로 합치기 */}
+            {(()=>{
+              const phones=needsK.map(t=>(t.phone||'').replace(/-/g,'')).filter(Boolean).join(',');
+              const msg='[고시원 납부 안내] 이번 달 월세 납부일이 됐습니다. 미납 시 연체료가 발생할 수 있습니다. 계좌: 국민 123-456-789';
+              const encoded=encodeURIComponent(msg);
+              const isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent);
+              const smsUrl=isIOS?`sms:${phones}&body=${encoded}`:`sms:${phones}?body=${encoded}`;
+              return (
+                <a href={smsUrl}
+                  style={{display:'block',background:'#FEE500',color:'#3C1E1E',padding:'14px',borderRadius:12,fontWeight:700,fontSize:15,textDecoration:'none',textAlign:'center'}}
+                  onClick={()=>{
+                    needsK.forEach(t=>{
+                      const room=rooms.find(r=>r.id===t.roomId);
+                      setKlog(prev=>[{id:Date.now()+t.id,tenantName:t.name,roomId:room?.id,message:msg,time:new Date().toLocaleTimeString('ko-KR'),status:'📱 전체 문자앱 열림'},...prev]);
+                    });
+                    setBulkSmsModal(false);
+                    showToast(`${needsK.length}명에게 문자앱 열기 완료`);
+                  }}>
+                  📱 {needsK.length}명 한번에 문자 발송
+                </a>
+              );
+            })()}
+            <div style={{fontSize:11,color:'#475569',textAlign:'center',marginTop:8,lineHeight:1.6}}>
+              문자앱이 열리면 수신자가 자동으로 입력돼요<br/>내용 확인 후 보내기만 누르세요
+            </div>
+          </div>
+        }
       </div>
     </div>}
 
