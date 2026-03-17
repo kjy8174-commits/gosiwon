@@ -657,18 +657,6 @@ function App(){
 
   /* 카카오 */
   /* 템플릿 변수 치환 */
-  const applyTmpl=(tmpl,vars)=>tmpl
-    .replace(/@이름/g,vars.name||'')
-    .replace(/@방호수/g,String(vars.roomId||''))
-    .replace(/@금액/g,vars.rent||'')
-    .replace(/@납부일/g,String(vars.payDay||''))
-    .replace(/@납부까지일/g,String(vars.daysLeft||''))
-    .replace(/@연체상태/g,vars.overdue||'')
-    .replace(/@연락처/g,vars.phone||'')
-    .replace(/@제목/g,vars.title||'')
-    .replace(/@내용/g,vars.content||'');
-
-  /* 템플릿 변수 치환 */
   const applyTmpl=(tmpl,vars)=>(tmpl||'')
     .replace(/@이름/g,vars.name||'')
     .replace(/@방호수/g,String(vars.roomId||''))
