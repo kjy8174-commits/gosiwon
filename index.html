@@ -7,8 +7,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;background:#0d1117;color:#e2e8f0;font-family:'Apple SD Gothic Neo','Noto Sans KR',sans-serif;font-size:15px;-webkit-font-smoothing:antialiased}
 ::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-track{background:#1a2332}::-webkit-scrollbar-thumb{background:#334155;border-radius:2px}
@@ -32,7 +32,7 @@ const {useState,useEffect}=React;
 /* ── Supabase 초기화 ── */
 const SUPA_URL='https://cgytergpgwotxlnxmvcv.supabase.co';
 const SUPA_KEY='sb_publishable_4w7U1Bpi65jzNNfyDGJXHQ_jo7YxLb0';
-const sb=supabase.createClient(SUPA_URL,SUPA_KEY);
+const sb=(window.supabase||supabase).createClient(SUPA_URL,SUPA_KEY);
 
 /* DB 저장 헬퍼 - 테이블 전체를 한 번에 저장 */
 async function dbSave(table, data){
