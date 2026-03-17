@@ -8,6 +8,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
 <style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;background:#0d1117;color:#e2e8f0;font-family:'Apple SD Gothic Neo','Noto Sans KR',sans-serif;font-size:15px;-webkit-font-smoothing:antialiased}
 ::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-track{background:#1a2332}::-webkit-scrollbar-thumb{background:#334155;border-radius:2px}
@@ -26,7 +27,40 @@ input,select,textarea{-webkit-appearance:none;appearance:none;color:#e2e8f0}
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const {useState}=React;
+const {useState,useEffect}=React;
+
+/* ── Supabase 초기화 ── */
+const SUPA_URL='https://cgytergpgwotxlnxmvcv.supabase.co';
+const SUPA_KEY='sb_publishable_4w7U1Bpi65jzNNfyDGJXHQ_jo7YxLb0';
+const sb=supabase.createClient(SUPA_URL,SUPA_KEY);
+
+/* DB 저장 헬퍼 - 테이블 전체를 한 번에 저장 */
+async function dbSave(table, data){
+  try{
+    // 기존 데이터 전체 삭제 후 재삽입 (심플하게)
+    await sb.from(table).delete().neq('id',0);
+    if(data.length>0) await sb.from(table).insert(data);
+  }catch(e){ console.error('DB 저장 오류:',table,e); }
+}
+async function dbLoad(table){ 
+  const {data,error}=await sb.from(table).select('*');
+  if(error){ console.error('DB 로드 오류:',table,error); return null; }
+  return data;
+}
+
+/* 데이터 변환 헬퍼 */
+const roomToDb  =r=>({id:r.id,floor:r.floor,type:r.type,size:r.size,status:r.status,monthly_rent:r.monthlyRent});
+const roomFromDb=r=>({id:r.id,floor:r.floor,type:r.type,size:r.size,status:r.status,monthlyRent:r.monthly_rent});
+const tenantToDb=t=>({id:t.id,name:t.name,phone:t.phone||'',room_id:t.roomId,move_in:t.moveIn||'',move_out:t.moveOut||'',pay_day:t.payDay,deposit:t.deposit||0,paid:t.paid||false,paid_date:t.paidDate||'',memo:t.memo||'',stay_type:t.stayType||'월',daily_rate:t.dailyRate||0,reserve_date:t.reserveDate||'',contract_name:t.contractName||''});
+const tenantFromDb=t=>({id:t.id,name:t.name,phone:t.phone,roomId:t.room_id,moveIn:t.move_in,moveOut:t.move_out||null,payDay:t.pay_day,deposit:t.deposit,paid:t.paid,paidDate:t.paid_date||null,memo:t.memo,stayType:t.stay_type,dailyRate:t.daily_rate,reserveDate:t.reserve_date||null,contractName:t.contract_name||null,contractFile:null});
+const expToDb   =e=>({id:e.id,month:e.month,date:e.date||'',category:e.category,amount:e.amount,memo:e.memo||''});
+const expFromDb =e=>({id:e.id,month:e.month,date:e.date,category:e.category,amount:e.amount,memo:e.memo});
+const shopToDb  =s=>({id:s.id,name:s.name,category:s.category,qty:s.qty||'',urgent:s.urgent||false,memo:s.memo||'',done:s.done||false});
+const shopFromDb=s=>({id:s.id,name:s.name,category:s.category,qty:s.qty,urgent:s.urgent,memo:s.memo,done:s.done});
+const maintToDb =m=>({id:m.id,room_id:m.roomId,category:m.category,content:m.content,report_date:m.reportDate,status:m.status,priority:m.priority});
+const maintFromDb=m=>({id:m.id,roomId:m.room_id,category:m.category,content:m.content,reportDate:m.report_date,status:m.status,priority:m.priority});
+const noticeToDb=n=>({id:n.id,title:n.title,content:n.content,date:n.date,important:n.important||false});
+const noticeFromDb=n=>({id:n.id,title:n.title,content:n.content,date:n.date,important:n.important});
 
 /* ── 날짜 유틸 ── */
 const today=new Date();
@@ -299,6 +333,41 @@ function App(){
   const [maint,setMaint]=useState(IM);
   const [expenses,setExpenses]=useState(IE);
   const [shopping,setShopping]=useState(ISH);
+  const [dbReady,setDbReady]=useState(false);
+
+  /* ── DB에서 초기 데이터 로드 ── */
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const [rr,tt,ee,ss,mm,nn]=await Promise.all([
+          dbLoad('rooms'),dbLoad('tenants'),dbLoad('expenses'),
+          dbLoad('shopping'),dbLoad('maintenance'),dbLoad('notices')
+        ]);
+        // 데이터 있으면 DB 데이터 사용, 없으면 초기 데이터 세팅
+        if(rr&&rr.length>0) setRooms(rr.map(roomFromDb));
+        else await dbSave('rooms',IR.map(roomToDb));
+        if(tt&&tt.length>0) setTenants(tt.map(tenantFromDb));
+        else await dbSave('tenants',IT.map(tenantToDb));
+        if(ee&&ee.length>0) setExpenses(ee.map(expFromDb));
+        else await dbSave('expenses',IE.map(expToDb));
+        if(ss&&ss.length>0) setShopping(ss.map(shopFromDb));
+        else await dbSave('shopping',ISH.map(shopToDb));
+        if(mm&&mm.length>0) setMaint(mm.map(maintFromDb));
+        else await dbSave('maintenance',IM.map(maintToDb));
+        if(nn&&nn.length>0) setNotices(nn.map(noticeFromDb));
+        else await dbSave('notices',IN2.map(noticeToDb));
+      }catch(e){ console.error('초기 로드 오류:',e); }
+      setDbReady(true);
+    })();
+  },[]);
+
+  /* ── DB 동기화 래퍼 함수 ── */
+  const syncRooms   =v=>{setRooms(v);   dbSave('rooms',v.map(roomToDb));};
+  const syncTenants =v=>{setTenants(v); dbSave('tenants',v.map(tenantToDb));};
+  const syncExpenses=v=>{setExpenses(v);dbSave('expenses',v.map(expToDb));};
+  const syncShopping=v=>{setShopping(v);dbSave('shopping',v.map(shopToDb));};
+  const syncMaint   =v=>{setMaint(v);   dbSave('maintenance',v.map(maintToDb));};
+  const syncNotices =v=>{setNotices(v); dbSave('notices',v.map(noticeToDb));};
   const [modal,setModal]=useState(null);
   const [md,setMd]=useState(null);
   const [toast,setToast]=useState(null);
@@ -350,7 +419,7 @@ function App(){
     showToast(`${t.name}님 문자앱 열기 완료`);
   };
   const sendAllK=()=>{needsK.forEach(t=>sendK(t));showToast(`${needsK.length}명 발송 완료`);};
-  const markPaid=id=>{setTenants(prev=>prev.map(t=>t.id===id?{...t,paid:true,paidDate:fmt(today)}:t));showToast('납부 완료 처리');setModal(null);};
+  const markPaid=id=>{const pt=tenants.map(t=>t.id===id?{...t,paid:true,paidDate:fmt(today)}:t);syncTenants(pt);showToast('납부 완료 처리');setModal(null);};
 
   /* 매출 */
   const months6=Array.from({length:6},(_,i)=>bmo(i-5));
@@ -366,7 +435,7 @@ function App(){
   const addExpense=()=>{
     const amt=parseInt((newExp.amount||'').replace(/,/g,''));
     if(!amt||amt<=0){showToast('금액을 입력하세요','error');return;}
-    setExpenses(prev=>[...prev,{id:Date.now(),month:revMo,date:newExp.date,category:newExp.category,amount:amt,memo:newExp.memo}]);
+    const ne=[...expenses,{id:Date.now(),month:revMo,date:newExp.date,category:newExp.category,amount:amt,memo:newExp.memo}];syncExpenses(ne);
     setNewExp(p=>({...p,amount:'',memo:''}));showToast('지출 추가');
   };
 
@@ -377,12 +446,12 @@ function App(){
   const LB={fontSize:12,color:'#64748b',marginBottom:5,display:'block',fontWeight:600};
   const go=id=>{setPage(id);closeSide();};
 
-  const saveRoom=()=>{setRooms(prev=>prev.map(r=>r.id===md.id?{...md,monthlyRent:parseInt(md.monthlyRent)||0}:r));showToast('방 정보 저장');setModal(null);};
+  const saveRoom=()=>{const updated=rooms.map(r=>r.id===md.id?{...md,monthlyRent:parseInt(md.monthlyRent)||0}:r);syncRooms(updated);showToast('방 정보 저장');setModal(null);};
   const saveTenant=()=>{
     const upd={...md,deposit:parseInt(md.deposit)||0,payDay:parseInt(md.payDay)||1,dailyRate:parseInt(md.dailyRate)||0,roomId:parseInt(md.roomId)||md.roomId};
     const exists=tenants.find(t=>t.id===md.id);
-    if(exists)setTenants(prev=>prev.map(t=>t.id===md.id?upd:t));
-    else{setTenants(prev=>[...prev,{...upd,id:Date.now()}]);if(md.roomId)setRooms(prev=>prev.map(r=>r.id===parseInt(md.roomId)?{...r,status:'occupied'}:r));}
+    if(exists){const ut=tenants.map(t=>t.id===md.id?upd:t);syncTenants(ut);}
+    else{const nt=[...tenants,{...upd,id:Date.now()}];syncTenants(nt);if(md.roomId){const nr2=rooms.map(r=>r.id===parseInt(md.roomId)?{...r,status:'occupied'}:r);syncRooms(nr2);}}
     showToast('저장 완료');setModal(null);
   };
 
@@ -563,7 +632,7 @@ function App(){
           {urgentShop.map(s=><div key={s.id} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 0',borderBottom:'1px solid #1e2d3d'}}>
             <span className="tg" style={{background:'#ef444422',color:'#ef4444'}}>긴급</span>
             <div style={{flex:1}}><div style={{fontSize:13,fontWeight:600}}>{s.name}</div><div style={{fontSize:11,color:'#64748b'}}>{s.qty}{s.memo&&` · ${s.memo}`}</div></div>
-            <button className="ab" style={{background:'#22c55e',color:'#fff',padding:'6px 12px',fontSize:12}} onClick={()=>setShopping(prev=>prev.map(x=>x.id===s.id?{...x,done:true}:x))}>완료</button>
+            <button className="ab" style={{background:'#22c55e',color:'#fff',padding:'6px 12px',fontSize:12}} onClick={()=>syncShopping(shopping.map(x=>x.id===s.id?{...x,done:true}:x))}>완료</button>
           </div>)}
         </div>}
 
@@ -630,7 +699,7 @@ function App(){
                 <div key={e.id} style={{display:'flex',alignItems:'center',gap:7,padding:'8px 0',borderBottom:'1px solid #1e2d3d'}}>
                   <span className="tg" style={{background:(CC[e.category]||'#64748b')+'22',color:CC[e.category]||'#64748b',flexShrink:0,fontSize:10}}>{e.category}</span>
                   <div style={{flex:1}}><div style={{fontSize:13,fontWeight:700}}>{e.amount.toLocaleString()}원</div><div style={{fontSize:11,color:'#64748b'}}>{e.date||'-'}{e.memo&&` · ${e.memo}`}</div></div>
-                  <button style={{background:'none',border:'none',cursor:'pointer',color:'#475569',fontSize:17,padding:'2px 5px',lineHeight:1}} onClick={()=>{setExpenses(prev=>prev.filter(x=>x.id!==e.id));showToast('삭제');}}>×</button>
+                  <button style={{background:'none',border:'none',cursor:'pointer',color:'#475569',fontSize:17,padding:'2px 5px',lineHeight:1}} onClick={()=>{syncExpenses(expenses.filter(x=>x.id!==e.id));showToast('삭제');}}>×</button>
                 </div>
               ))}
               {selExps.length>0&&<div style={{display:'flex',justifyContent:'space-between',padding:'9px 0 0',fontWeight:700,fontSize:13}}>
@@ -823,8 +892,8 @@ function App(){
               {t.contractFile?<>
                 <button className="ab" style={{background:'#22c55e',color:'#fff',padding:'10px 16px',fontWeight:600,fontSize:13}} onClick={()=>{setMd(t);setModal('viewContract');}}>📄 보기</button>
                 <button className="ab" style={{background:'#3b82f6',color:'#fff',padding:'10px 16px',fontWeight:600,fontSize:13}} onClick={()=>{const a=document.createElement('a');a.href=t.contractFile;a.download=t.contractName||`계약서_${t.name}.pdf`;a.click();}}>⬇ 다운</button>
-                <label style={{background:'#1a2332',color:'#94a3b8',padding:'10px 13px',borderRadius:10,fontSize:12,fontWeight:600,cursor:'pointer',border:'1px solid #2d3f53'}}>🔄 재업로드<input type="file" accept=".pdf,image/*" style={{display:'none'}} onChange={e=>{const f=e.target.files[0];if(f){const u=URL.createObjectURL(f);setTenants(prev=>prev.map(x=>x.id===t.id?{...x,contractFile:u,contractName:f.name}:x));showToast('재업로드 완료');}}}/></label>
-              </>:<label style={{background:'#1d4ed8',color:'#fff',padding:'12px 18px',borderRadius:10,fontSize:13,fontWeight:600,cursor:'pointer',display:'inline-flex',alignItems:'center',gap:7}}>📤 업로드<input type="file" accept=".pdf,image/*" style={{display:'none'}} onChange={e=>{const f=e.target.files[0];if(f){const u=URL.createObjectURL(f);setTenants(prev=>prev.map(x=>x.id===t.id?{...x,contractFile:u,contractName:f.name}:x));showToast(`${t.name} 업로드 완료`);}}}/></label>}
+                <label style={{background:'#1a2332',color:'#94a3b8',padding:'10px 13px',borderRadius:10,fontSize:12,fontWeight:600,cursor:'pointer',border:'1px solid #2d3f53'}}>🔄 재업로드<input type="file" accept=".pdf,image/*" style={{display:'none'}} onChange={e=>{const f=e.target.files[0];if(f){const u=URL.createObjectURL(f);syncTenants(tenants.map(x=>x.id===t.id?{...x,contractFile:u,contractName:f.name}:x));showToast('재업로드 완료');}}}/></label>
+              </>:<label style={{background:'#1d4ed8',color:'#fff',padding:'12px 18px',borderRadius:10,fontSize:13,fontWeight:600,cursor:'pointer',display:'inline-flex',alignItems:'center',gap:7}}>📤 업로드<input type="file" accept=".pdf,image/*" style={{display:'none'}} onChange={e=>{const f=e.target.files[0];if(f){const u=URL.createObjectURL(f);syncTenants(tenants.map(x=>x.id===t.id?{...x,contractFile:u,contractName:f.name}:x));showToast(`${t.name} 업로드 완료`);}}}/></label>}
             </div>
           </div>)}
         </div>
@@ -857,7 +926,7 @@ function App(){
           </div>
           <button className="ab" style={{width:'100%',background:'#1d4ed8',color:'#fff',padding:'12px',fontSize:14,fontWeight:700}} onClick={()=>{
             if(!newShop.name.trim()){showToast('물품명을 입력하세요','error');return;}
-            setShopping(prev=>[{id:Date.now(),...newShop,done:false},...prev]);
+            syncShopping([{id:Date.now(),...newShop,done:false},...shopping]);
             setNewShop({name:'',category:'소모품',qty:'',urgent:false,memo:''});showToast('추가 완료');
           }}>추가하기</button>
         </div>
@@ -866,7 +935,7 @@ function App(){
           <div className="st">🛒 구매 필요 ({shopping.filter(s=>!s.done).length}개)</div>
           {shopping.filter(s=>!s.done).sort((a,b)=>b.urgent-a.urgent).map(s=>(
             <div key={s.id} style={{background:'#111827',border:`1px solid ${s.urgent?'#ef444433':'#1e2d3d'}`,borderRadius:13,padding:'13px 14px',marginBottom:7,display:'flex',alignItems:'center',gap:9}}>
-              <button onClick={()=>setShopping(prev=>prev.map(x=>x.id===s.id?{...x,done:true}:x))} style={{width:22,height:22,borderRadius:6,border:'2px solid #334155',background:'none',cursor:'pointer',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center'}}/>
+              <button onClick={()=>syncShopping(shopping.map(x=>x.id===s.id?{...x,done:true}:x))} style={{width:22,height:22,borderRadius:6,border:'2px solid #334155',background:'none',cursor:'pointer',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center'}}/>
               <div style={{flex:1}}>
                 <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:3}}>
                   {s.urgent&&<span className="tg" style={{background:'#ef444422',color:'#ef4444',fontSize:10}}>긴급</span>}
@@ -875,7 +944,7 @@ function App(){
                 <div style={{fontWeight:600,fontSize:14,color:'#f1f5f9'}}>{s.name}</div>
                 <div style={{fontSize:11,color:'#64748b'}}>{s.qty&&`수량: ${s.qty}`}{s.memo&&` · ${s.memo}`}</div>
               </div>
-              <button style={{background:'none',border:'none',cursor:'pointer',color:'#475569',fontSize:18,padding:'3px 6px',lineHeight:1}} onClick={()=>{setShopping(prev=>prev.filter(x=>x.id!==s.id));showToast('삭제');}}>×</button>
+              <button style={{background:'none',border:'none',cursor:'pointer',color:'#475569',fontSize:18,padding:'3px 6px',lineHeight:1}} onClick={()=>{syncShopping(shopping.filter(x=>x.id!==s.id));showToast('삭제');}}>×</button>
             </div>
           ))}
         </div>}
@@ -891,8 +960,8 @@ function App(){
                 <div style={{fontWeight:600,fontSize:13,color:'#94a3b8',textDecoration:'line-through'}}>{s.name}</div>
                 <div style={{fontSize:11,color:'#64748b'}}>{s.qty}</div>
               </div>
-              <button style={{background:'none',border:'none',cursor:'pointer',color:'#475569',fontSize:14,padding:'3px 6px'}} onClick={()=>{setShopping(prev=>prev.map(x=>x.id===s.id?{...x,done:false}:x));}}>↩</button>
-              <button style={{background:'none',border:'none',cursor:'pointer',color:'#475569',fontSize:18,padding:'3px 6px',lineHeight:1}} onClick={()=>{setShopping(prev=>prev.filter(x=>x.id!==s.id));showToast('삭제');}}>×</button>
+              <button style={{background:'none',border:'none',cursor:'pointer',color:'#475569',fontSize:14,padding:'3px 6px'}} onClick={()=>{syncShopping(shopping.map(x=>x.id===s.id?{...x,done:false}:x));}}>↩</button>
+              <button style={{background:'none',border:'none',cursor:'pointer',color:'#475569',fontSize:18,padding:'3px 6px',lineHeight:1}} onClick={()=>{syncShopping(shopping.filter(x=>x.id!==s.id));showToast('삭제');}}>×</button>
             </div>
           ))}
         </div>}
@@ -914,7 +983,7 @@ function App(){
             </div>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
               <div style={{fontSize:11,color:'#64748b'}}>{item.category} · {item.reportDate}</div>
-              {item.status!=='완료'&&<button className="ab" style={{background:'#22c55e',color:'#fff',padding:'7px 14px',fontSize:12,fontWeight:600}} onClick={()=>setMaint(prev=>prev.map(m=>m.id===item.id?{...m,status:m.status==='대기'?'처리중':'완료'}:m))}>{item.status==='대기'?'처리 시작':'완료'}</button>}
+              {item.status!=='완료'&&<button className="ab" style={{background:'#22c55e',color:'#fff',padding:'7px 14px',fontSize:12,fontWeight:600}} onClick={()=>syncMaint(maint.map(m=>m.id===item.id?{...m,status:m.status==='대기'?'처리중':'완료'}:m))}>{item.status==='대기'?'처리 시작':'완료'}</button>}
             </div>
           </div>
         );})}
@@ -1045,7 +1114,7 @@ function App(){
         </div>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:9,marginTop:16}}>
           <button className="ab" style={{background:'#1a2332',color:'#94a3b8',border:'1px solid #2d3f53',padding:'13px',fontSize:14}} onClick={()=>setModal(null)}>취소</button>
-          <button className="ab" style={{background:'#1d4ed8',color:'#fff',padding:'13px',fontSize:14,fontWeight:700}} onClick={()=>{const t=document.getElementById('nt').value,c=document.getElementById('nc').value,i=document.getElementById('ni').checked;if(!t||!c)return;setNotices(prev=>[{id:Date.now(),title:t,content:c,important:i,date:fmt(today)},...prev]);showToast('공지 등록');setModal(null);}}>등록</button>
+          <button className="ab" style={{background:'#1d4ed8',color:'#fff',padding:'13px',fontSize:14,fontWeight:700}} onClick={()=>{const t=document.getElementById('nt').value,c=document.getElementById('nc').value,i=document.getElementById('ni').checked;if(!t||!c)return;syncNotices([{id:Date.now(),title:t,content:c,important:i,date:fmt(today)},...notices]);showToast('공지 등록');setModal(null);}}>등록</button>
         </div>
       </div>
     </div>}
@@ -1062,7 +1131,7 @@ function App(){
         </div>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:9,marginTop:16}}>
           <button className="ab" style={{background:'#1a2332',color:'#94a3b8',border:'1px solid #2d3f53',padding:'13px',fontSize:14}} onClick={()=>setModal(null)}>취소</button>
-          <button className="ab" style={{background:'#1d4ed8',color:'#fff',padding:'13px',fontSize:14,fontWeight:700}} onClick={()=>{const r=parseInt(document.getElementById('mr').value),c=document.getElementById('mco').value;if(!r||!c)return;setMaint(prev=>[{id:Date.now(),roomId:r,category:document.getElementById('mc').value,content:c,priority:document.getElementById('mp').value,reportDate:fmt(today),status:'대기'},...prev]);showToast('항목 추가');setModal(null);}}>추가</button>
+          <button className="ab" style={{background:'#1d4ed8',color:'#fff',padding:'13px',fontSize:14,fontWeight:700}} onClick={()=>{const r=parseInt(document.getElementById('mr').value),c=document.getElementById('mco').value;if(!r||!c)return;syncMaint([{id:Date.now(),roomId:r,category:document.getElementById('mc').value,content:c,priority:document.getElementById('mp').value,reportDate:fmt(today),status:'대기'},...maint]);showToast('항목 추가');setModal(null);}}>추가</button>
         </div>
       </div>
     </div>}
