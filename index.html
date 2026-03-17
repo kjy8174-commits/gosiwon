@@ -376,10 +376,144 @@ function App(){
   const [newExp,setNewExp]=useState({category:'수도세',amount:'',memo:'',date:fmt(today)});
   const [newShop,setNewShop]=useState({name:'',category:'소모품',qty:'',urgent:false,memo:''});
   const [sideOpen,setSideOpen]=useState(false);
+  const [csvPreview,setCsvPreview]=useState(null);
+  const [csvMapping,setCsvMapping]=useState({});
+  const [csvType,setCsvType]=useState('tenants');
 
   const showToast=(msg,type='success')=>{setToast({msg,type});setTimeout(()=>setToast(null),3000);};
   const getRoomT=rid=>tenants.find(t=>t.roomId===rid);
   const closeSide=()=>setSideOpen(false);
+
+  /* ── CSV 파싱 ── */
+  const parseCSV=file=>{
+    const reader=new FileReader();
+    reader.onload=e=>{
+      try{
+        const text=e.target.result;
+        const lines=text.split(/\r?\n/).filter(l=>l.trim());
+        if(lines.length<2){showToast('데이터가 없습니다','error');return;}
+        // BOM 제거
+        const clean=l=>l.replace(/^\uFEFF/,'').trim();
+        const parseRow=l=>{
+          const res=[];let cur='',inQ=false;
+          for(let i=0;i<l.length;i++){
+            if(l[i]==='"'){inQ=!inQ;}
+            else if(l[i]===','&&!inQ){res.push(cur.trim());cur='';}
+            else cur+=l[i];
+          }
+          res.push(cur.trim());return res;
+        };
+        const headers=parseRow(clean(lines[0]));
+        const rows=lines.slice(1).filter(l=>l.trim()).map(l=>{
+          const vals=parseRow(l);
+          const obj={};
+          headers.forEach((h,i)=>obj[h]=(vals[i]||'').replace(/^"|"$/g,'').trim());
+          return obj;
+        });
+        // 자동 매핑 시도
+        const autoMap={};
+        const mapDict={
+          tenants:{
+            '방호수':'roomId','호수':'roomId','방':'roomId',
+            '이름':'name','성명':'name',
+            '연락처':'phone','전화':'phone','핸드폰':'phone','전화번호':'phone',
+            '입주일':'moveIn','입실일':'moveIn',
+            '만료일':'moveOut','퇴실일':'moveOut','계약만료':'moveOut',
+            '납부일':'payDay','납부':'payDay',
+            '월세':'monthlyRent','임대료':'monthlyRent',
+            '보증금':'deposit',
+            '메모':'memo','특이사항':'memo',
+          },
+          rooms:{'방호수':'id','호수':'id','층':'floor','타입':'type','크기':'size','면적':'size','월세':'monthlyRent','상태':'status'},
+          expenses:{'날짜':'date','분류':'category','항목':'category','금액':'amount','메모':'memo','월':'month'},
+          shopping:{'물품명':'name','품목':'name','분류':'category','수량':'qty','메모':'memo','긴급':'urgent'},
+        };
+        headers.forEach(h=>{
+          const dict=mapDict[csvType]||{};
+          const matched=Object.keys(dict).find(k=>h.includes(k)||k.includes(h));
+          if(matched)autoMap[h]=dict[matched];
+        });
+        setCsvMapping(autoMap);
+        setCsvPreview({headers,rows});
+        showToast(`${rows.length}개 행 감지됨`);
+      }catch(err){showToast('CSV 파싱 오류: '+err.message,'error');}
+    };
+    reader.readAsText(file,'UTF-8');
+  };
+
+  /* ── CSV 가져오기 ── */
+  const importCSV=()=>{
+    if(!csvPreview)return;
+    const {rows}=csvPreview;
+    try{
+      if(csvType==='tenants'){
+        const newT=rows.map((row,i)=>{
+          const get=field=>row[Object.keys(csvMapping).find(k=>csvMapping[k]===field)]||'';
+          const rid=parseInt(get('roomId'))||0;
+          const rent=parseInt((get('monthlyRent')||'').replace(/[^0-9]/g,''))||0;
+          const dep=parseInt((get('deposit')||'').replace(/[^0-9]/g,''))||0;
+          const pd=parseInt(get('payDay'))||1;
+          // 방이 없으면 자동 생성
+          if(rid&&!rooms.find(r=>r.id===rid)){
+            const fl=Math.floor(rid/100)||1;
+            const newRoom={id:rid,floor:fl,type:'single',size:'7평',status:'occupied',monthlyRent:rent||380000};
+            syncRooms([...rooms,newRoom]);
+          }
+          return{
+            id:Date.now()+i,
+            name:get('name')||'이름없음',
+            phone:get('phone')||'',
+            roomId:rid,
+            moveIn:get('moveIn')||fmt(today),
+            moveOut:get('moveOut')||null,
+            payDay:pd>31?1:pd<1?1:pd,
+            deposit:dep,
+            paid:false,paidDate:null,
+            memo:get('memo')||'',
+            stayType:get('stayType')||'월',
+            dailyRate:0,reserveDate:null,
+            contractFile:null,contractName:null,
+          };
+        });
+        syncTenants([...tenants,...newT]);
+        showToast(`입주자 ${newT.length}명 가져오기 완료 ✅`);
+      }else if(csvType==='rooms'){
+        const newR=rows.map(row=>{
+          const get=field=>row[Object.keys(csvMapping).find(k=>csvMapping[k]===field)]||'';
+          return{
+            id:parseInt(get('id'))||0,
+            floor:parseInt(get('floor'))||1,
+            type:get('type')||'single',
+            size:get('size')||'7평',
+            status:get('status')||'vacant',
+            monthlyRent:parseInt((get('monthlyRent')||'').replace(/[^0-9]/g,''))||380000,
+          };
+        }).filter(r=>r.id>0);
+        syncRooms([...rooms,...newR.filter(r=>!rooms.find(x=>x.id===r.id))]);
+        showToast(`방 ${newR.length}개 가져오기 완료 ✅`);
+      }else if(csvType==='expenses'){
+        const today_ym=bmo(0);
+        const newE=rows.map((row,i)=>{
+          const get=field=>row[Object.keys(csvMapping).find(k=>csvMapping[k]===field)]||'';
+          const amt=parseInt((get('amount')||'').replace(/[^0-9]/g,''))||0;
+          const dt=get('date')||'';
+          const mo=get('month')||dt.substring(0,7)||today_ym;
+          return{id:Date.now()+i,month:mo,date:dt,category:get('category')||'기타',amount:amt,memo:get('memo')||''};
+        }).filter(e=>e.amount>0);
+        syncExpenses([...expenses,...newE]);
+        showToast(`지출 ${newE.length}건 가져오기 완료 ✅`);
+      }else if(csvType==='shopping'){
+        const newS=rows.map((row,i)=>{
+          const get=field=>row[Object.keys(csvMapping).find(k=>csvMapping[k]===field)]||'';
+          return{id:Date.now()+i,name:get('name')||'',category:get('category')||'소모품',qty:get('qty')||'',urgent:get('urgent')==='예'||get('urgent')==='true',memo:get('memo')||'',done:false};
+        }).filter(s=>s.name);
+        syncShopping([...shopping,...newS]);
+        showToast(`구매리스트 ${newS.length}개 가져오기 완료 ✅`);
+      }
+      setCsvPreview(null);setCsvMapping({});
+    }catch(err){showToast('가져오기 오류: '+err.message,'error');}
+  };
+
 
   /* 통계 */
   const stats={
@@ -466,6 +600,7 @@ function App(){
     {id:'shopping',icon:'🛒',label:'구매 리스트'},
     {id:'maintenance',icon:'🔧',label:'시설 관리'},
     {id:'notices',icon:'📢',label:'공지사항'},
+    {id:'import',icon:'📥',label:'데이터 가져오기'},
   ];
   const totalAlerts=(todayCheckin.length+todayCheckout.length+upcoming3.length+expiring30.length+urgentShop.length);
 
@@ -964,6 +1099,124 @@ function App(){
               <button style={{background:'none',border:'none',cursor:'pointer',color:'#475569',fontSize:18,padding:'3px 6px',lineHeight:1}} onClick={()=>{syncShopping(shopping.filter(x=>x.id!==s.id));showToast('삭제');}}>×</button>
             </div>
           ))}
+        </div>}
+      </div>}
+
+
+      {/* ━━━ 데이터 가져오기 ━━━ */}
+      {page==='import'&&<div className="fi">
+        <h1 style={{fontSize:21,fontWeight:700,color:'#f8fafc',marginBottom:6}}>데이터 가져오기</h1>
+        <div style={{fontSize:13,color:'#64748b',marginBottom:16}}>엑셀에서 CSV로 저장한 파일을 올려주세요</div>
+
+        {/* CSV 형식 안내 */}
+        <div style={{background:'#1d4ed811',border:'1px solid #1d4ed833',borderRadius:14,padding:16,marginBottom:16}}>
+          <div style={{fontSize:14,fontWeight:700,color:'#93c5fd',marginBottom:10}}>📋 엑셀 → CSV 변환 방법</div>
+          <div style={{fontSize:13,color:'#94a3b8',lineHeight:1.9}}>
+            엑셀에서 <strong style={{color:'#e2e8f0'}}>파일 → 다른 이름으로 저장 → CSV (쉼표로 분리)</strong> 선택 후 저장
+          </div>
+          <div style={{marginTop:12}}>
+            <div style={{fontSize:12,fontWeight:700,color:'#64748b',marginBottom:6}}>입주자 CSV 권장 컬럼명 (첫 번째 행):</div>
+            <div style={{background:'#0d1117',borderRadius:8,padding:'8px 12px',fontSize:12,color:'#22c55e',fontFamily:'monospace'}}>
+              방호수, 이름, 연락처, 입주일, 만료일, 납부일, 월세, 보증금, 메모
+            </div>
+          </div>
+        </div>
+
+        {/* 가져올 데이터 종류 선택 */}
+        <div style={{marginBottom:14}}>
+          <div style={{fontSize:12,fontWeight:700,color:'#64748b',marginBottom:8}}>가져올 데이터 종류</div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+            {[['tenants','👤 입주자'],['rooms','🏠 방 정보'],['expenses','📊 지출 내역'],['shopping','🛒 구매 리스트']].map(([v,l])=>(
+              <button key={v} className="ab" style={{padding:'12px',fontSize:13,fontWeight:600,background:csvType===v?'#1d4ed8':'#1a2332',color:csvType===v?'#fff':'#94a3b8',border:`1px solid ${csvType===v?'#3b82f6':'#2d3f53'}`}} onClick={()=>{setCsvType(v);setCsvPreview(null);setCsvMapping({});}}>
+                {l}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* CSV 업로드 */}
+        <label style={{display:'block',background:'linear-gradient(135deg,#1e2d3d,#1a2332)',border:'2px dashed #2d3f53',borderRadius:14,padding:'28px',textAlign:'center',cursor:'pointer',marginBottom:14,transition:'border .2s'}}
+          onDragOver={e=>{e.preventDefault();e.currentTarget.style.borderColor='#3b82f6';}}
+          onDragLeave={e=>{e.currentTarget.style.borderColor='#2d3f53';}}
+          onDrop={e=>{e.preventDefault();e.currentTarget.style.borderColor='#2d3f53';const f=e.dataTransfer.files[0];if(f)parseCSV(f);}}>
+          <div style={{fontSize:32,marginBottom:8}}>📥</div>
+          <div style={{fontSize:15,fontWeight:600,color:'#e2e8f0',marginBottom:4}}>CSV 파일을 여기에 끌어다 놓거나 클릭</div>
+          <div style={{fontSize:12,color:'#64748b'}}>.csv 파일만 지원 / 엑셀에서 CSV로 저장 후 올려주세요</div>
+          <input type="file" accept=".csv,text/csv" style={{display:'none'}} onChange={e=>{if(e.target.files[0])parseCSV(e.target.files[0]);}}/>
+        </label>
+
+        {/* 미리보기 & 컬럼 매핑 */}
+        {csvPreview&&<div>
+          <div style={{background:'linear-gradient(135deg,#1e2d3d,#1a2332)',border:'1px solid #2d3f53',borderRadius:14,padding:16,marginBottom:14}}>
+            <div style={{fontSize:14,fontWeight:700,color:'#f1f5f9',marginBottom:12}}>
+              📄 미리보기 — 총 {csvPreview.rows.length}행 감지
+            </div>
+            {/* 컬럼 매핑 */}
+            <div style={{fontSize:12,fontWeight:700,color:'#64748b',marginBottom:8}}>컬럼 매핑 (CSV 헤더 → 시스템 필드)</div>
+            <div style={{display:'flex',flexDirection:'column',gap:8,marginBottom:14}}>
+              {csvPreview.headers.map((h,i)=>(
+                <div key={i} style={{display:'grid',gridTemplateColumns:'1fr 24px 1fr',alignItems:'center',gap:8}}>
+                  <div style={{background:'#0d1117',borderRadius:8,padding:'8px 12px',fontSize:13,color:'#93c5fd',fontWeight:600}}>{h}</div>
+                  <div style={{textAlign:'center',color:'#475569',fontSize:16}}>→</div>
+                  <select className="if" style={{fontSize:13}} value={csvMapping[h]||''} onChange={e=>setCsvMapping(p=>({...p,[h]:e.target.value}))}>
+                    <option value="">무시</option>
+                    {csvType==='tenants'&&<>
+                      <option value="roomId">방호수</option>
+                      <option value="name">이름</option>
+                      <option value="phone">연락처</option>
+                      <option value="moveIn">입주일</option>
+                      <option value="moveOut">만료일</option>
+                      <option value="payDay">납부일(일)</option>
+                      <option value="monthlyRent">월세</option>
+                      <option value="deposit">보증금</option>
+                      <option value="memo">메모</option>
+                      <option value="stayType">거주단위(월/일/주)</option>
+                    </>}
+                    {csvType==='rooms'&&<>
+                      <option value="id">방호수</option>
+                      <option value="floor">층</option>
+                      <option value="type">타입(single/double)</option>
+                      <option value="size">크기</option>
+                      <option value="monthlyRent">월세</option>
+                      <option value="status">상태</option>
+                    </>}
+                    {csvType==='expenses'&&<>
+                      <option value="date">날짜</option>
+                      <option value="category">분류</option>
+                      <option value="amount">금액</option>
+                      <option value="memo">메모</option>
+                      <option value="month">월(YYYY-MM)</option>
+                    </>}
+                    {csvType==='shopping'&&<>
+                      <option value="name">물품명</option>
+                      <option value="category">분류</option>
+                      <option value="qty">수량</option>
+                      <option value="memo">메모</option>
+                      <option value="urgent">긴급여부</option>
+                    </>}
+                  </select>
+                </div>
+              ))}
+            </div>
+            {/* 데이터 미리보기 테이블 */}
+            <div style={{fontSize:12,fontWeight:700,color:'#64748b',marginBottom:6}}>데이터 미리보기 (최대 3행)</div>
+            <div style={{overflowX:'auto',borderRadius:8,background:'#0d1117'}}>
+              <table style={{width:'100%',borderCollapse:'collapse',fontSize:11}}>
+                <thead><tr style={{borderBottom:'1px solid #1e2d3d'}}>
+                  {csvPreview.headers.map((h,i)=><th key={i} style={{padding:'8px 10px',textAlign:'left',color:'#64748b',fontWeight:700,whiteSpace:'nowrap'}}>{h}</th>)}
+                </tr></thead>
+                <tbody>{csvPreview.rows.slice(0,3).map((row,i)=>(
+                  <tr key={i} style={{borderBottom:'1px solid #1e2d3d'}}>
+                    {csvPreview.headers.map((h,j)=><td key={j} style={{padding:'7px 10px',color:'#94a3b8',whiteSpace:'nowrap',maxWidth:120,overflow:'hidden',textOverflow:'ellipsis'}}>{row[h]||'-'}</td>)}
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+          </div>
+          {/* 가져오기 버튼 */}
+          <button className="ab" style={{width:'100%',background:'#22c55e',color:'#fff',padding:'14px',fontSize:15,fontWeight:700}} onClick={()=>importCSV()}>
+            ✅ {csvPreview.rows.length}개 데이터 가져오기
+          </button>
         </div>}
       </div>}
 
