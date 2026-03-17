@@ -62,6 +62,15 @@ const maintFromDb=m=>({id:m.id,roomId:m.room_id,category:m.category,content:m.co
 const noticeToDb=n=>({id:n.id,title:n.title,content:n.content,date:n.date,important:n.important||false});
 const noticeFromDb=n=>({id:n.id,title:n.title,content:n.content,date:n.date,important:n.important});
 
+
+/* ── 기본 문자 템플릿 ── */
+const DEFAULT_TEMPLATES = {
+  remind:  '[고시원 납부 안내] 안녕하세요 @이름 님! @방호수호 @금액 납부일이 @납부까지일 남았습니다. 계좌: 국민 123-456-789 감사합니다',
+  today:   '[고시원 납부 안내] @이름 님, 오늘이 납부일입니다! @방호수호 @금액 납부 부탁드립니다. 계좌: 국민 123-456-789',
+  overdue: '[고시원 납부 알림] @이름 님, @연체상태 상태입니다. 빠른 납부 부탁드립니다. 문의: @연락처',
+  notice:  '[고시원 공지] @제목
+@내용',
+};
 /* ── 날짜 유틸 ── */
 const today=new Date();
 const fmt=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -385,6 +394,8 @@ function App(){
   const [tenantFilter,setTenantFilter]=useState('all');  // all/unpaid/expiring
   const [bulkSmsModal,setBulkSmsModal]=useState(false);
   const [smsModal,setSmsModal]=useState(null); // {phones, msg, title}
+  const [smsTemplates,setSmsTemplates]=useState(()=>{ try{ const s=localStorage.getItem('gw_sms_templates'); return s?JSON.parse(s):DEFAULT_TEMPLATES; }catch(e){ return DEFAULT_TEMPLATES; } });
+  const saveSmsTemplates=tmpl=>{ setSmsTemplates(tmpl); try{ localStorage.setItem('gw_sms_templates',JSON.stringify(tmpl)); }catch(e){} };
 
   const showToast=(msg,type='success')=>{setToast({msg,type});setTimeout(()=>setToast(null),3000);};
   const getRoomT=rid=>tenants.find(t=>t.roomId===rid);
@@ -646,22 +657,42 @@ function App(){
   const urgentShop   =shopping.filter(s=>!s.done&&s.urgent);
 
   /* 카카오 */
+  /* 템플릿 변수 치환 */
+  const applyTmpl=(tmpl,vars)=>tmpl
+    .replace(/@이름/g,vars.name||'')
+    .replace(/@방호수/g,String(vars.roomId||''))
+    .replace(/@금액/g,vars.rent||'')
+    .replace(/@납부일/g,String(vars.payDay||''))
+    .replace(/@납부까지일/g,String(vars.daysLeft||''))
+    .replace(/@연체상태/g,vars.overdue||'')
+    .replace(/@연락처/g,vars.phone||'')
+    .replace(/@제목/g,vars.title||'')
+    .replace(/@내용/g,vars.content||'');
+
+  /* 템플릿 변수 치환 */
+  const applyTmpl=(tmpl,vars)=>(tmpl||'')
+    .replace(/@이름/g,vars.name||'')
+    .replace(/@방호수/g,String(vars.roomId||''))
+    .replace(/@금액/g,vars.rent||'')
+    .replace(/@납부일/g,String(vars.payDay||''))
+    .replace(/@납부까지일/g,String(vars.daysLeft||''))
+    .replace(/@연체상태/g,vars.overdue||'')
+    .replace(/@연락처/g,vars.phone||'')
+    .replace(/@제목/g,vars.title||'')
+    .replace(/@내용/g,vars.content||'');
+
   const sendK=t=>{
     const room=rooms.find(r=>r.id===t.roomId);const s=getPS(t);
     const mt=s.urgency===3?'overdue':s.urgency===2?'today':'remind';
-    const msgs={
-      remind:`[고시원 납부 안내] 안녕하세요 ${t.name}님! ${room?.id}호 ${rentLabel(t,room)} 납부일이 ${Math.abs(new Date().getDate()-t.payDay)}일 남았습니다. 계좌: 국민 123-456-789 감사합니다`,
-      today:`[고시원 납부 안내] ${t.name}님, 오늘이 납부일입니다! ${room?.id}호 납부 부탁드립니다. 계좌: 국민 123-456-789`,
-      overdue:`[고시원 납부 알림] ${t.name}님, ${s.label} 상태입니다. 빠른 납부 부탁드립니다. 문의: 010-XXXX-XXXX`,
-    };
-    const msg=msgs[mt];
-    const phone=t.phone.replace(/-/g,'');
+    const vars={name:t.name,roomId:room?.id,rent:rentLabel(t,room),payDay:t.payDay,daysLeft:Math.abs(new Date().getDate()-t.payDay),overdue:s.label,phone:'010-XXXX-XXXX'};
+    const msg=applyTmpl(smsTemplates[mt]||DEFAULT_TEMPLATES[mt],vars);
+    const phone=(t.phone||'').replace(/-/g,'');
     const encoded=encodeURIComponent(msg);
     const isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent);
     const smsUrl=isIOS?`sms:${phone}&body=${encoded}`:`sms:${phone}?body=${encoded}`;
     window.location.href=smsUrl;
-    setKlog(prev=>[{id:Date.now(),tenantName:t.name,roomId:room?.id,message:msg,time:new Date().toLocaleTimeString('ko-KR'),status:'📱 문자앱 열림 → 보내기만 누르세요'},...prev]);
-    showToast(`${t.name}님 문자앱 열기 완료`);
+    setKlog(prev=>[{id:Date.now(),tenantName:t.name,roomId:room?.id,message:msg,time:new Date().toLocaleTimeString('ko-KR'),status:'📱 문자앱 열림'},...prev]);
+    showToast(`${t.name}님 문자앱 열기`);
   };
   const sendAllK=()=>{ setBulkSmsModal(true); };
   const markPaid=id=>{const pt=tenants.map(t=>t.id===id?{...t,paid:true,paidDate:fmt(today)}:t);syncTenants(pt);showToast('납부 완료 처리');setModal(null);};
@@ -712,6 +743,7 @@ function App(){
     {id:'maintenance',icon:'🔧',label:'시설 관리'},
     {id:'notices',icon:'📢',label:'공지사항'},
     {id:'import',icon:'📥',label:'데이터 가져오기'},
+    {id:'settings',icon:'⚙️',label:'설정'},
   ];
   const totalAlerts=(todayCheckin.length+todayCheckout.length+upcoming3.length+expiring30.length+urgentShop.length);
 
@@ -1239,6 +1271,104 @@ function App(){
         </div>}
       </div>}
 
+
+      {/* ━━━ 설정 ━━━ */}
+      {page==='settings'&&<div className="fi">
+        <h1 style={{fontSize:21,fontWeight:700,color:'#f8fafc',marginBottom:6}}>설정</h1>
+        <div style={{fontSize:13,color:'#64748b',marginBottom:16}}>문자 템플릿 · 고시원 정보 관리</div>
+
+        {/* 문자 템플릿 편집 */}
+        <div style={{background:'linear-gradient(135deg,#1e2d3d,#1a2332)',border:'1px solid #2d3f53',borderRadius:14,padding:16,marginBottom:14}}>
+          <div style={{fontSize:14,fontWeight:700,color:'#f1f5f9',marginBottom:4}}>💬 문자 템플릿 수정</div>
+          <div style={{fontSize:12,color:'#64748b',marginBottom:14,lineHeight:1.8}}>
+            아래 변수를 메시지에 넣으면 자동으로 바뀌어요:<br/>
+            <div style={{display:'flex',flexWrap:'wrap',gap:6,marginTop:8}}>
+              {['@이름','@방호수','@금액','@납부일','@납부까지일','@연체상태','@연락처'].map(v=>(
+                <span key={v} style={{background:'#1d4ed822',color:'#93c5fd',padding:'3px 10px',borderRadius:20,fontSize:12,fontWeight:600,cursor:'pointer'}}
+                  onClick={()=>showToast(`${v} 복사! 템플릿에 붙여넣기 하세요`)}>
+                  {v}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* 3가지 템플릿 */}
+          {[
+            {key:'remind',  label:'📅 납부일 전 알림', desc:'납부일 3일 전 ~ 당일 전날'},
+            {key:'today',   label:'⏰ 납부 당일 알림', desc:'납부일 당일'},
+            {key:'overdue', label:'🔴 연체 알림',       desc:'납부일 지난 후'},
+          ].map(tmpl=>(
+            <div key={tmpl.key} style={{marginBottom:14}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+                <div>
+                  <div style={{fontSize:13,fontWeight:700,color:'#e2e8f0'}}>{tmpl.label}</div>
+                  <div style={{fontSize:11,color:'#64748b'}}>{tmpl.desc}</div>
+                </div>
+                <button className="ab" style={{background:'#475569',color:'#fff',padding:'5px 11px',fontSize:11}} onClick={()=>saveSmsTemplates({...smsTemplates,[tmpl.key]:DEFAULT_TEMPLATES[tmpl.key]})}>
+                  기본값 복원
+                </button>
+              </div>
+              <textarea className="if" rows={3} style={{fontSize:13,lineHeight:1.7,resize:'vertical'}}
+                value={smsTemplates[tmpl.key]||DEFAULT_TEMPLATES[tmpl.key]}
+                onChange={e=>saveSmsTemplates({...smsTemplates,[tmpl.key]:e.target.value})}
+              />
+              {/* 미리보기 */}
+              <div style={{background:'#0d1117',borderRadius:8,padding:'9px 12px',marginTop:6}}>
+                <div style={{fontSize:10,color:'#475569',marginBottom:3}}>미리보기 (샘플)</div>
+                <div style={{fontSize:12,color:'#94a3b8',lineHeight:1.7,whiteSpace:'pre-wrap'}}>
+                  {applyTmpl(smsTemplates[tmpl.key]||DEFAULT_TEMPLATES[tmpl.key],{name:'홍길동',roomId:101,rent:'380,000원/월',payDay:15,daysLeft:3,overdue:'2일 연체',phone:'010-XXXX-XXXX'})}
+                </div>
+              </div>
+            </div>
+          ))}
+
+          {/* 공지 템플릿 */}
+          <div style={{marginBottom:4}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+              <div>
+                <div style={{fontSize:13,fontWeight:700,color:'#e2e8f0'}}>📢 공지 문자 템플릿</div>
+                <div style={{fontSize:11,color:'#64748b'}}>공지사항 문자 발송 시 사용</div>
+              </div>
+              <button className="ab" style={{background:'#475569',color:'#fff',padding:'5px 11px',fontSize:11}} onClick={()=>saveSmsTemplates({...smsTemplates,notice:DEFAULT_TEMPLATES.notice})}>
+                기본값 복원
+              </button>
+            </div>
+            <textarea className="if" rows={2} style={{fontSize:13,lineHeight:1.7,resize:'vertical'}}
+              value={smsTemplates.notice||DEFAULT_TEMPLATES.notice}
+              onChange={e=>saveSmsTemplates({...smsTemplates,notice:e.target.value})}
+            />
+            <div style={{fontSize:11,color:'#64748b',marginTop:4}}>사용 가능: @제목, @내용</div>
+          </div>
+        </div>
+
+        {/* 고시원 정보 */}
+        <div style={{background:'linear-gradient(135deg,#1e2d3d,#1a2332)',border:'1px solid #2d3f53',borderRadius:14,padding:16,marginBottom:14}}>
+          <div style={{fontSize:14,fontWeight:700,color:'#f1f5f9',marginBottom:12}}>🏢 고시원 정보</div>
+          <div style={{display:'flex',flexDirection:'column',gap:10}}>
+            {[
+              {key:'name',   label:'고시원 이름', placeholder:'예: 멀티하우스 고시원'},
+              {key:'account',label:'입금 계좌',    placeholder:'예: 국민 123-456-789'},
+              {key:'phone',  label:'관리자 연락처',placeholder:'예: 010-1234-5678'},
+            ].map(f=>(
+              <div key={f.key}>
+                <label style={{fontSize:12,color:'#64748b',marginBottom:5,display:'block',fontWeight:600}}>{f.label}</label>
+                <input className="if" style={{fontSize:14}}
+                  placeholder={f.placeholder}
+                  value={(smsTemplates['info_'+f.key])||''}
+                  onChange={e=>saveSmsTemplates({...smsTemplates,['info_'+f.key]:e.target.value})}
+                />
+              </div>
+            ))}
+          </div>
+          <div style={{fontSize:11,color:'#64748b',marginTop:10}}>* 입금 계좌, 연락처는 템플릿에 직접 넣거나 위 @연락처 변수로 사용하세요</div>
+        </div>
+
+        {/* 저장 확인 */}
+        <div style={{background:'#22c55e11',border:'1px solid #22c55e33',borderRadius:12,padding:'12px 14px',textAlign:'center'}}>
+          <div style={{fontSize:13,color:'#22c55e',fontWeight:600}}>✅ 변경사항은 자동 저장됩니다</div>
+          <div style={{fontSize:11,color:'#64748b',marginTop:3}}>이 기기 브라우저에 저장 (다른 기기에서도 쓰려면 Supabase 설정 필요)</div>
+        </div>
+      </div>}
 
       {/* ━━━ 데이터 가져오기 ━━━ */}
       {page==='import'&&<div className="fi">
