@@ -1200,17 +1200,30 @@ function App(){
                 <div style={{display:'flex',alignItems:'center',gap:5}}>
                   <span style={{fontWeight:600,fontSize:14}}>{t.name}</span>
                   <span style={{fontSize:11,color:t.gender==='여'?'#ec4899':'#3b82f6'}}>{t.gender||'남'}</span>
-                  {t.contractFile?<span className="tg" style={{background:'#22c55e22',color:'#22c55e',fontSize:10}}>✓ 등록</span>:<span className="tg" style={{background:'#1e2d3d',color:'#64748b',fontSize:10}}>미등록</span>}
+                  {t.contractFile&&!t.contractFile.startsWith('blob:')?<span className="tg" style={{background:'#22c55e22',color:'#22c55e',fontSize:10}}>✓ 등록</span>:t.contractName?<span className="tg" style={{background:'#f9743622',color:'#f97316',fontSize:10}}>⚠️ 재업로드필요</span>:<span className="tg" style={{background:'#1e2d3d',color:'#64748b',fontSize:10}}>미등록</span>}
                 </div>
                 <div style={{fontSize:11,color:'#64748b'}}>{t.moveIn} ~ {t.moveOut||'미정'}{t.contractName&&<span style={{color:'#475569'}}> · 📎{t.contractName}</span>}</div>
               </div>
-              <div style={{display:'flex',gap:6,flexShrink:0}}>
-                {t.contractFile?<>
-                  <button className="ab" style={{background:'#22c55e',color:'#fff',padding:'8px 12px',fontWeight:600,fontSize:12}} onClick={()=>{setMd(t);setModal('viewContract');}}>📄 보기</button>
-                  <button className="ab" style={{background:'#3b82f6',color:'#fff',padding:'8px 12px',fontWeight:600,fontSize:12}} onClick={()=>{const a=document.createElement('a');a.href=t.contractFile;a.download=t.contractName||`계약서_${t.name}.pdf`;a.click();}}>⬇</button>
-                  <label style={{background:'#1a2332',color:'#94a3b8',padding:'8px 10px',borderRadius:8,fontSize:12,fontWeight:600,cursor:'pointer',border:'1px solid #2d3f53'}}>🔄<input type="file" accept=".pdf,image/*" style={{display:'none'}} onChange={e=>{const f=e.target.files[0];if(f){const r2=new FileReader();r2.onload=ev=>{const b64=ev.target.result;syncTenants(tenants.map(x=>x.id===t.id?{...x,contractFile:b64,contractData:b64,contractName:f.name}:x));showToast('재업로드 완료');};r2.readAsDataURL(f);}}}/></label>
-                  <button className="ab" style={{background:'#ef444411',color:'#ef4444',border:'1px solid #ef444433',padding:'8px 10px',fontSize:12,fontWeight:600}} onClick={()=>{if(!window.confirm(`${t.name}님 계약서를 삭제하시겠어요?`))return;syncTenants(tenants.map(x=>x.id===t.id?{...x,contractFile:null,contractData:'',contractName:null}:x));showToast('계약서 삭제');}}>🗑️</button>
-                </>:<label style={{background:'#1d4ed8',color:'#fff',padding:'8px 14px',borderRadius:8,fontSize:12,fontWeight:600,cursor:'pointer',display:'inline-flex',alignItems:'center',gap:5}}>📤 업로드<input type="file" accept=".pdf,image/*" style={{display:'none'}} onChange={e=>{const f=e.target.files[0];if(f){const r2=new FileReader();r2.onload=ev=>{const b64=ev.target.result;syncTenants(tenants.map(x=>x.id===t.id?{...x,contractFile:b64,contractData:b64,contractName:f.name}:x));showToast(`${t.name} 업로드 완료`);};r2.readAsDataURL(f);}}}/></label>}
+              <div style={{display:'flex',gap:6,flexShrink:0,flexWrap:'wrap',justifyContent:'flex-end'}}>
+                {(()=>{
+                  // blob URL은 새로고침 후 무효 → null 처리
+                  const hasFile=t.contractFile&&!t.contractFile.startsWith('blob:');
+                  const hasName=t.contractName&&t.contractName.trim();
+                  const uploadInput=<input type="file" accept=".pdf,image/*" style={{display:'none'}} onChange={e=>{const f=e.target.files[0];if(f){const r2=new FileReader();r2.onload=ev=>{const b64=ev.target.result;syncTenants(tenants.map(x=>x.id===t.id?{...x,contractFile:b64,contractData:b64,contractName:f.name}:x));showToast('업로드 완료');};r2.readAsDataURL(f);}}}/>;
+                  const deleteBtn=<button className="ab" style={{background:'#ef444411',color:'#ef4444',border:'1px solid #ef444433',padding:'8px 10px',fontSize:12,fontWeight:600}} onClick={()=>{if(!window.confirm(`${t.name}님 계약서를 삭제하시겠어요?`))return;syncTenants(tenants.map(x=>x.id===t.id?{...x,contractFile:null,contractData:'',contractName:null}:x));showToast('계약서 삭제');}}>🗑️</button>;
+                  if(hasFile) return <>
+                    <button className="ab" style={{background:'#22c55e',color:'#fff',padding:'8px 12px',fontWeight:600,fontSize:12}} onClick={()=>{setMd(t);setModal('viewContract');}}>📄 보기</button>
+                    <button className="ab" style={{background:'#3b82f6',color:'#fff',padding:'8px 12px',fontWeight:600,fontSize:12}} onClick={()=>{const a=document.createElement('a');a.href=t.contractFile;a.download=t.contractName||`계약서_${t.name}.pdf`;a.click();}}>⬇</button>
+                    <label style={{background:'#1a2332',color:'#94a3b8',padding:'8px 10px',borderRadius:8,fontSize:12,fontWeight:600,cursor:'pointer',border:'1px solid #2d3f53'}}>🔄{uploadInput}</label>
+                    {deleteBtn}
+                  </>;
+                  if(hasName&&!hasFile) return <>
+                    <div style={{fontSize:11,color:'#f97316',alignSelf:'center'}}>⚠️ 재업로드 필요</div>
+                    <label style={{background:'#f9743622',color:'#f97316',padding:'8px 12px',borderRadius:8,fontSize:12,fontWeight:600,cursor:'pointer',border:'1px solid #f9743644',display:'inline-flex',alignItems:'center',gap:4}}>🔄 재업로드{uploadInput}</label>
+                    {deleteBtn}
+                  </>;
+                  return <label style={{background:'#1d4ed8',color:'#fff',padding:'8px 14px',borderRadius:8,fontSize:12,fontWeight:600,cursor:'pointer',display:'inline-flex',alignItems:'center',gap:5}}>📤 업로드{uploadInput}</label>;
+                })()}
               </div>
             </div>
           </div>)}
