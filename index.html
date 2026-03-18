@@ -1209,6 +1209,7 @@ function App(){
                   <button className="ab" style={{background:'#22c55e',color:'#fff',padding:'8px 12px',fontWeight:600,fontSize:12}} onClick={()=>{setMd(t);setModal('viewContract');}}>📄 보기</button>
                   <button className="ab" style={{background:'#3b82f6',color:'#fff',padding:'8px 12px',fontWeight:600,fontSize:12}} onClick={()=>{const a=document.createElement('a');a.href=t.contractFile;a.download=t.contractName||`계약서_${t.name}.pdf`;a.click();}}>⬇</button>
                   <label style={{background:'#1a2332',color:'#94a3b8',padding:'8px 10px',borderRadius:8,fontSize:12,fontWeight:600,cursor:'pointer',border:'1px solid #2d3f53'}}>🔄<input type="file" accept=".pdf,image/*" style={{display:'none'}} onChange={e=>{const f=e.target.files[0];if(f){const r2=new FileReader();r2.onload=ev=>{const b64=ev.target.result;syncTenants(tenants.map(x=>x.id===t.id?{...x,contractFile:b64,contractData:b64,contractName:f.name}:x));showToast('재업로드 완료');};r2.readAsDataURL(f);}}}/></label>
+                  <button className="ab" style={{background:'#ef444411',color:'#ef4444',border:'1px solid #ef444433',padding:'8px 10px',fontSize:12,fontWeight:600}} onClick={()=>{if(!window.confirm(`${t.name}님 계약서를 삭제하시겠어요?`))return;syncTenants(tenants.map(x=>x.id===t.id?{...x,contractFile:null,contractData:'',contractName:null}:x));showToast('계약서 삭제');}}>🗑️</button>
                 </>:<label style={{background:'#1d4ed8',color:'#fff',padding:'8px 14px',borderRadius:8,fontSize:12,fontWeight:600,cursor:'pointer',display:'inline-flex',alignItems:'center',gap:5}}>📤 업로드<input type="file" accept=".pdf,image/*" style={{display:'none'}} onChange={e=>{const f=e.target.files[0];if(f){const r2=new FileReader();r2.onload=ev=>{const b64=ev.target.result;syncTenants(tenants.map(x=>x.id===t.id?{...x,contractFile:b64,contractData:b64,contractName:f.name}:x));showToast(`${t.name} 업로드 완료`);};r2.readAsDataURL(f);}}}/></label>}
               </div>
             </div>
@@ -1610,7 +1611,7 @@ function App(){
       {page==='maintenance'&&<div className="fi">
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
           <h1 style={{fontSize:21,fontWeight:700,color:'#f8fafc'}}>시설 관리</h1>
-          <button className="ab" style={{background:'#1d4ed8',color:'#fff',padding:'10px 16px',fontWeight:600,fontSize:13}} onClick={()=>setModal('am')}>+ 추가</button>
+          <button className="ab" style={{background:'#1d4ed8',color:'#fff',padding:'10px 16px',fontWeight:600,fontSize:13}} onClick={()=>{setMd({mroomId:'',mcategory:'전기',mcontent:'',mpriority:'보통',mstatus:'대기'});setModal('am');}}>+ 추가</button>
         </div>
         {maint.map(item=>{const pc={높음:'#ef4444',보통:'#f59e0b',낮음:'#22c55e'};const sc2={대기:'#ef4444',처리중:'#f59e0b',완료:'#22c55e'};return(
           <div key={item.id} style={{background:'#111827',border:`1px solid ${item.status!=='완료'?'#2d3f53':'#1e2d3d'}`,borderRadius:13,padding:'13px 14px',marginBottom:7,opacity:item.status==='완료'?.55:1}}>
@@ -1624,6 +1625,7 @@ function App(){
               <div style={{fontSize:11,color:'#64748b'}}>{item.category} · {item.reportDate}</div>
               <div style={{display:'flex',gap:6}}>
                 {item.status!=='완료'&&<button className="ab" style={{background:'#22c55e',color:'#fff',padding:'7px 14px',fontSize:12,fontWeight:600}} onClick={()=>syncMaint(maint.map(m=>m.id===item.id?{...m,status:m.status==='대기'?'처리중':'완료'}:m))}>{item.status==='대기'?'처리 시작':'완료'}</button>}
+                <button className="ab" style={{background:'#1d4ed822',color:'#93c5fd',border:'1px solid #1d4ed844',padding:'7px 12px',fontSize:12,fontWeight:600}} onClick={()=>{setMd({mid:item.id,mroomId:item.roomId,mcategory:item.category,mcontent:item.content,mpriority:item.priority,mstatus:item.status});setModal('editMaint');}}>✏️</button>
                 <button className="ab" style={{background:'#ef444422',color:'#ef4444',border:'1px solid #ef444433',padding:'7px 12px',fontSize:12}} onClick={()=>{if(!window.confirm('삭제하시겠어요?'))return;syncMaint(maint.filter(m=>m.id!==item.id));showToast('삭제');}}>🗑️</button>
               </div>
             </div>
@@ -1640,7 +1642,7 @@ function App(){
               const allPhones=tenants.filter(t=>rooms.find(r=>r.id===t.roomId)?.status==='occupied').map(t=>(t.phone||'').replace(/-/g,'')).filter(Boolean);
               setSmsModal({phones:allPhones,msg:'',title:'전체 입주자 문자 발송'});
             }}>💬 전체 문자</button>
-            <button className="ab" style={{background:'#1d4ed8',color:'#fff',padding:'10px 16px',fontWeight:600,fontSize:13}} onClick={()=>setModal('an')}>+ 작성</button>
+            <button className="ab" style={{background:'#1d4ed8',color:'#fff',padding:'10px 16px',fontWeight:600,fontSize:13}} onClick={()=>{setMd({ntitle:'',ncontent:'',nimportant:false});setModal('an');}}>+ 작성</button>
           </div>
         </div>
         {notices.map(n=><div key={n.id} style={{background:'#111827',border:`1px solid ${n.important?'#ef444444':'#1e2d3d'}`,borderRadius:13,padding:'14px',marginBottom:9}}>
@@ -1655,6 +1657,7 @@ function App(){
             setSmsModal({phones:allPhones,msg:`[고시원 공지] ${n.title}
 ${n.content}`,title:`공지 문자 발송 — ${n.title}`});
           }}>💬 문자 발송</button>
+            <button className="ab" style={{background:'#1d4ed822',color:'#93c5fd',border:'1px solid #1d4ed844',padding:'8px 12px',fontSize:12,fontWeight:600}} onClick={()=>{setMd({nid:n.id,ntitle:n.title,ncontent:n.content,nimportant:n.important});setModal('editNotice');}}>✏️ 수정</button>
             <button className="ab" style={{background:'#ef444411',color:'#ef4444',border:'1px solid #ef444433',padding:'8px 12px',fontSize:12}} onClick={()=>{if(!window.confirm('공지를 삭제하시겠어요?'))return;syncNotices(notices.filter(x=>x.id!==n.id));showToast('공지 삭제');}}>🗑️ 삭제</button>
         </div>)}
       </div>}
@@ -1798,19 +1801,53 @@ ${c}`,title:`공지 문자 발송 — ${t}`});
       </div>
     </div>}
 
-    {/* ═══ 모달: 시설 추가 ═══ */}
-    {modal==='am'&&<div className="moov" onClick={()=>setModal(null)}>
+    {/* ═══ 모달: 시설 추가/수정 ═══ */}
+    {(modal==='am'||modal==='editMaint')&&md&&<div className="moov" onClick={()=>setModal(null)}>
       <div className="mobox" onClick={e=>e.stopPropagation()}>
-        <div style={{fontSize:17,fontWeight:700,marginBottom:16}}>시설 관리 항목 추가</div>
+        <div style={{fontSize:17,fontWeight:700,marginBottom:16}}>{modal==='editMaint'?'시설 관리 수정':'시설 관리 항목 추가'}</div>
         <div style={{display:'flex',flexDirection:'column',gap:11}}>
-          <select className="if" id="mr"><option value="">방 선택</option>{rooms.map(r=><option key={r.id} value={r.id}>{r.id}호</option>)}</select>
-          <select className="if" id="mc"><option>전기</option><option>배관</option><option>가구</option><option>도어락</option><option>기타</option></select>
-          <input className="if" id="mco" placeholder="내용"/>
-          <select className="if" id="mp"><option>높음</option><option>보통</option><option>낮음</option></select>
+          <div><label style={{fontSize:12,color:'#64748b',marginBottom:5,display:'block',fontWeight:600}}>방 호수</label>
+            <select className="if" value={md.mroomId||''} onChange={e=>setMd(p=>({...p,mroomId:e.target.value}))}>
+              <option value="">방 선택</option>{rooms.map(r=><option key={r.id} value={r.id}>{r.id}호</option>)}
+            </select>
+          </div>
+          <div><label style={{fontSize:12,color:'#64748b',marginBottom:5,display:'block',fontWeight:600}}>분류</label>
+            <select className="if" value={md.mcategory||'전기'} onChange={e=>setMd(p=>({...p,mcategory:e.target.value}))}>
+              {['전기','배관','가구','도어락','기타'].map(c=><option key={c}>{c}</option>)}
+            </select>
+          </div>
+          <div><label style={{fontSize:12,color:'#64748b',marginBottom:5,display:'block',fontWeight:600}}>내용</label>
+            <input className="if" placeholder="내용" value={md.mcontent||''} onChange={e=>setMd(p=>({...p,mcontent:e.target.value}))}/>
+          </div>
+          <div><label style={{fontSize:12,color:'#64748b',marginBottom:5,display:'block',fontWeight:600}}>우선순위</label>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}}>
+              {[['높음','#ef4444'],['보통','#f59e0b'],['낮음','#22c55e']].map(([p,c])=>(
+                <button key={p} className="ab" style={{padding:'10px',fontSize:13,fontWeight:600,background:md.mpriority===p?c:'#1a2332',color:md.mpriority===p?'#fff':'#94a3b8',border:`1px solid ${c}44`}} onClick={()=>setMd(pr=>({...pr,mpriority:p}))}>{p}</button>
+              ))}
+            </div>
+          </div>
+          {modal==='editMaint'&&<div><label style={{fontSize:12,color:'#64748b',marginBottom:5,display:'block',fontWeight:600}}>처리 상태</label>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}}>
+              {[['대기','#ef4444'],['처리중','#f59e0b'],['완료','#22c55e']].map(([s,c])=>(
+                <button key={s} className="ab" style={{padding:'10px',fontSize:13,fontWeight:600,background:md.mstatus===s?c:'#1a2332',color:md.mstatus===s?'#fff':'#94a3b8',border:`1px solid ${c}44`}} onClick={()=>setMd(pr=>({...pr,mstatus:s}))}>{s}</button>
+              ))}
+            </div>
+          </div>}
         </div>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:9,marginTop:16}}>
-          <button className="ab" style={{background:'#1a2332',color:'#94a3b8',border:'1px solid #2d3f53',padding:'13px',fontSize:14}} onClick={()=>setModal(null)}>취소</button>
-          <button className="ab" style={{background:'#1d4ed8',color:'#fff',padding:'13px',fontSize:14,fontWeight:700}} onClick={()=>{const r=parseInt(document.getElementById('mr').value),c=document.getElementById('mco').value;if(!r||!c)return;syncMaint([{id:Date.now(),roomId:r,category:document.getElementById('mc').value,content:c,priority:document.getElementById('mp').value,reportDate:fmt(today),status:'대기'},...maint]);showToast('항목 추가');setModal(null);}}>추가</button>
+          <button className="ab" style={{background:'#1a2332',color:'#94a3b8',border:'1px solid #2d3f53',padding:'13px',fontSize:14}} onClick={()=>{setModal(null);setMd(null);}}>취소</button>
+          <button className="ab" style={{background:'#1d4ed8',color:'#fff',padding:'13px',fontSize:14,fontWeight:700}} onClick={()=>{
+            const r=parseInt(md.mroomId),c=md.mcontent;
+            if(!r||!c){showToast('방과 내용을 입력하세요','error');return;}
+            if(modal==='editMaint'){
+              syncMaint(maint.map(m=>m.id===md.mid?{...m,roomId:r,category:md.mcategory||'기타',content:c,priority:md.mpriority||'보통',status:md.mstatus||m.status}:m));
+              showToast('수정 완료');
+            } else {
+              syncMaint([{id:Date.now(),roomId:r,category:md.mcategory||'기타',content:c,priority:md.mpriority||'보통',reportDate:fmt(today),status:'대기'},...maint]);
+              showToast('항목 추가');
+            }
+            setModal(null);setMd(null);
+          }}>{modal==='editMaint'?'수정 저장':'추가'}</button>
         </div>
       </div>
     </div>}
