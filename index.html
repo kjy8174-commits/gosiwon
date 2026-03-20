@@ -737,21 +737,19 @@ function App(){
 
   const saveRoom=()=>{const updated=rooms.map(r=>r.id===md.id?{...md,monthlyRent:parseInt(md.monthlyRent)||0}:r);syncRooms(updated);showToast('방 정보 저장');setModal(null);};
   const saveTenant=()=>{
-    const rid=parseInt(md.roomId)||md.roomId;
-    const upd={...md,deposit:parseInt(md.deposit)||0,payDay:parseInt(md.payDay)||1,dailyRate:parseInt(md.dailyRate)||0,roomId:rid};
-    // 예약자 여부: 입주일이 오늘 이후면 예약
-    const isReserve=upd.moveIn&&diffDays(upd.moveIn,todayStr)>0;
+    const rid=parseInt(md.roomId)||md.roomId||null;
+    const isReserve=md.moveIn&&diffDays(md.moveIn,todayStr)>0;
+    // 예약자면 reserveDate 자동 세팅, 아니면 null
+    const reserveDate=isReserve?(md.reserveDate||md.moveIn):null;
     const roomStatus=isReserve?'reserved':'occupied';
+    const upd={...md,deposit:parseInt(md.deposit)||0,payDay:parseInt(md.payDay)||1,dailyRate:parseInt(md.dailyRate)||0,roomId:rid,reserveDate};
     const exists=tenants.find(t=>t.id===md.id);
     if(exists){
-      const ut=tenants.map(t=>t.id===md.id?upd:t);
-      syncTenants(ut);
-      // 방 상태 업데이트 (기존 방 변경 시)
-      if(rid){const nr=rooms.map(r=>r.id===rid?{...r,status:roomStatus}:r);syncRooms(nr);}
+      syncTenants(tenants.map(t=>t.id===md.id?upd:t));
+      if(rid){syncRooms(rooms.map(r=>r.id===rid?{...r,status:roomStatus}:r));}
     } else {
-      const nt=[...tenants,{...upd,id:Date.now()}];
-      syncTenants(nt);
-      if(rid){const nr=rooms.map(r=>r.id===rid?{...r,status:roomStatus}:r);syncRooms(nr);}
+      syncTenants([...tenants,{...upd,id:Date.now()}]);
+      if(rid){syncRooms(rooms.map(r=>r.id===rid?{...r,status:roomStatus}:r));}
     }
     showToast('저장 완료');setModal(null);
   };
@@ -1358,13 +1356,12 @@ function App(){
       {page==='reserved'&&<div className="fi">
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
           <h1 style={{fontSize:21,fontWeight:700,color:'#f8fafc'}}>예약자 관리</h1>
-          <button className="ab" style={{background:'#1d4ed8',color:'#fff',padding:'10px 16px',fontWeight:600,fontSize:13}} onClick={()=>{setMd({id:null,name:'',phone:'',roomId:'',moveIn:fmt(today),moveOut:'',payDay:parseInt(fmt(today).split('-')[2]),deposit:0,paid:false,paidDate:null,memo:'',contractFile:null,contractName:null,contractData:'',stayType:'월',dailyRate:0,reserveDate:fmt(today),gender:'남',checkedOut:false,payMethod:'현금',depositRefunded:false});setModal('editTenant');}}>+ 예약 추가</button>
+          <button className="ab" style={{background:'#1d4ed8',color:'#fff',padding:'10px 16px',fontWeight:600,fontSize:13}} onClick={()=>{const tomorrow=fmt(addDays(today,1));setMd({id:null,name:'',phone:'',roomId:'',moveIn:tomorrow,moveOut:'',payDay:parseInt(tomorrow.split('-')[2]),deposit:0,paid:false,paidDate:null,memo:'',contractFile:null,contractName:null,contractData:'',stayType:'월',dailyRate:0,reserveDate:tomorrow,gender:'남',checkedOut:false,payMethod:'현금',depositRefunded:false});setModal('editTenant');}}>+ 예약 추가</button>
         </div>
         {(()=>{
-          const reservedTenants=tenants.filter(t=>{
-            const room=rooms.find(r=>r.id===t.roomId);
-            return !t.checkedOut&&(room?.status==='reserved'||diffDays(t.moveIn,todayStr)>0);
-          }).sort((a,b)=>diffDays(a.moveIn,todayStr)-diffDays(b.moveIn,todayStr));
+          const reservedTenants=tenants.filter(t=>
+            !t.checkedOut&&t.reserveDate&&t.reserveDate.trim()
+          ).sort((a,b)=>(a.moveIn||'').localeCompare(b.moveIn||''));
           return reservedTenants.length===0
             ?<div style={{background:'#111827',border:'1px solid #1e2d3d',borderRadius:14,padding:32,textAlign:'center',color:'#64748b',fontSize:13}}>예약자 없음</div>
             :reservedTenants.map(t=>{
@@ -1399,7 +1396,8 @@ function App(){
                   <button className="ab" style={{background:'#22c55e',color:'#fff',padding:'8px 14px',fontSize:12,fontWeight:600,flex:1}} onClick={()=>{
                     const occupant=tenants.find(x=>x.id!==t.id&&x.roomId===t.roomId&&!x.checkedOut&&rooms.find(r=>r.id===t.roomId)?.status==='occupied');
                     if(occupant){showToast(`⚠️ ${t.roomId}호에 ${occupant.name}님이 입실 중입니다. 먼저 퇴실 처리해주세요.`,'error');return;}
-                    syncTenants(tenants.map(x=>x.id===t.id?{...x,reserveDate:null}:x));
+                    // reserveDate 제거 → 예약자 목록에서 사라짐
+                    syncTenants(tenants.map(x=>x.id===t.id?{...x,reserveDate:null,moveIn:x.moveIn||todayStr}:x));
                     syncRooms(rooms.map(r=>r.id===t.roomId?{...r,status:'occupied'}:r));
                     showToast(`${t.name} 입실 처리 완료`);
                   }}>✓ 입실 처리</button>
