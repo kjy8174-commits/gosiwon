@@ -388,6 +388,9 @@ function App(){
   const syncNotices =v=>{setNotices(v); dbSave('notices',v.map(noticeToDb));};
   const [modal,setModal]=useState(null);
   const [md,setMd]=useState(null);
+  const [payHistory,setPayHistory]=useState(()=>{try{const s=localStorage.getItem('gw_payhistory');return s?JSON.parse(s):[];}catch(e){return [];}});
+  const [viewTenant,setViewTenant]=useState(null); // 상세 보기 모달용
+  const savePayHistory=h=>{setPayHistory(h);try{localStorage.setItem('gw_payhistory',JSON.stringify(h));}catch(e){}};
   const [toast,setToast]=useState(null);
   const [klog,setKlog]=useState([]);
   const [revMo,setRevMo]=useState(bmo(0));
@@ -692,7 +695,20 @@ function App(){
     showToast(`${t.name}님 문자앱 열기`);
   };
   const sendAllK=()=>{ setBulkSmsModal(true); };
-  const markPaid=id=>{const pt=tenants.map(t=>t.id===id?{...t,paid:true,paidDate:fmt(today)}:t);syncTenants(pt);showToast('납부 완료 처리');setModal(null);};
+  const markPaid=id=>{
+    const t=tenants.find(x=>x.id===id);
+    const room=t?rooms.find(r=>r.id===t.roomId):null;
+    const pt=tenants.map(x=>x.id===id?{...x,paid:true,paidDate:fmt(today)}:x);
+    syncTenants(pt);
+    // 납부 이력 기록
+    if(t){
+      const mo=bmo(0);
+      const amt=calcRent(t,room);
+      const newH=[...payHistory.filter(h=>!(h.tenantId===id&&h.month===mo)),{id:Date.now(),tenantId:id,tenantName:t.name,roomId:t.roomId,month:mo,amount:amt,method:t.payMethod||'현금',date:fmt(today)}];
+      savePayHistory(newH);
+    }
+    showToast('납부 완료 처리');setModal(null);
+  };
 
   /* 매출 */
   const months6=Array.from({length:6},(_,i)=>bmo(i-5));
@@ -721,10 +737,22 @@ function App(){
 
   const saveRoom=()=>{const updated=rooms.map(r=>r.id===md.id?{...md,monthlyRent:parseInt(md.monthlyRent)||0}:r);syncRooms(updated);showToast('방 정보 저장');setModal(null);};
   const saveTenant=()=>{
-    const upd={...md,deposit:parseInt(md.deposit)||0,payDay:parseInt(md.payDay)||1,dailyRate:parseInt(md.dailyRate)||0,roomId:parseInt(md.roomId)||md.roomId};
+    const rid=parseInt(md.roomId)||md.roomId;
+    const upd={...md,deposit:parseInt(md.deposit)||0,payDay:parseInt(md.payDay)||1,dailyRate:parseInt(md.dailyRate)||0,roomId:rid};
+    // 예약자 여부: 입주일이 오늘 이후면 예약
+    const isReserve=upd.moveIn&&diffDays(upd.moveIn,todayStr)>0;
+    const roomStatus=isReserve?'reserved':'occupied';
     const exists=tenants.find(t=>t.id===md.id);
-    if(exists){const ut=tenants.map(t=>t.id===md.id?upd:t);syncTenants(ut);}
-    else{const nt=[...tenants,{...upd,id:Date.now()}];syncTenants(nt);if(md.roomId){const nr2=rooms.map(r=>r.id===parseInt(md.roomId)?{...r,status:'occupied'}:r);syncRooms(nr2);}}
+    if(exists){
+      const ut=tenants.map(t=>t.id===md.id?upd:t);
+      syncTenants(ut);
+      // 방 상태 업데이트 (기존 방 변경 시)
+      if(rid){const nr=rooms.map(r=>r.id===rid?{...r,status:roomStatus}:r);syncRooms(nr);}
+    } else {
+      const nt=[...tenants,{...upd,id:Date.now()}];
+      syncTenants(nt);
+      if(rid){const nr=rooms.map(r=>r.id===rid?{...r,status:roomStatus}:r);syncRooms(nr);}
+    }
     showToast('저장 완료');setModal(null);
   };
 
@@ -1100,7 +1128,9 @@ function App(){
                     {rs?.status==='reserved'&&<span style={{fontSize:11,color:'#f59e0b'}}>예약</span>}
                   </div>
                 </div>
-                <span style={{color:'#475569',fontSize:16,flexShrink:0}}>›</span>
+                <button style={{background:'none',border:'none',cursor:'pointer',padding:'4px',flexShrink:0}} onClick={e=>{e.stopPropagation();setViewTenant(t);}}>
+                  <span style={{fontSize:22,color:'#475569'}}>›</span>
+                </button>
               </div>
             </div>;
           })}
@@ -1367,10 +1397,13 @@ function App(){
                 </div>
                 <div style={{display:'flex',gap:7}}>
                   <button className="ab" style={{background:'#22c55e',color:'#fff',padding:'8px 14px',fontSize:12,fontWeight:600,flex:1}} onClick={()=>{
+                    const occupant=tenants.find(x=>x.id!==t.id&&x.roomId===t.roomId&&!x.checkedOut&&rooms.find(r=>r.id===t.roomId)?.status==='occupied');
+                    if(occupant){showToast(`⚠️ ${t.roomId}호에 ${occupant.name}님이 입실 중입니다. 먼저 퇴실 처리해주세요.`,'error');return;}
                     syncTenants(tenants.map(x=>x.id===t.id?{...x,reserveDate:null}:x));
                     syncRooms(rooms.map(r=>r.id===t.roomId?{...r,status:'occupied'}:r));
-                    showToast(`${t.name} 입실 처리`);
+                    showToast(`${t.name} 입실 처리 완료`);
                   }}>✓ 입실 처리</button>
+                  <button className="ab" style={{background:'#1a2332',color:'#94a3b8',border:'1px solid #2d3f53',padding:'8px 12px',fontSize:12,fontWeight:600}} onClick={()=>setViewTenant(t)}>👁</button>
                   <button className="ab" style={{background:'#1d4ed822',color:'#93c5fd',border:'1px solid #1d4ed844',padding:'8px 14px',fontSize:12,fontWeight:600}} onClick={()=>{setMd({...t,payMethod:t.payMethod||'현금',depositRefunded:t.depositRefunded||false});setModal('editTenant');}}>✏️ 수정</button>
                   <button className="ab" style={{background:'#ef444411',color:'#ef4444',border:'1px solid #ef444433',padding:'8px 11px',fontSize:12}} onClick={()=>{
                     if(!window.confirm(`${t.name}님 예약을 취소하시겠어요?`))return;
@@ -1432,6 +1465,7 @@ function App(){
                 </div>
               </div>}
               <div style={{display:'flex',gap:7}}>
+                <button className="ab" style={{background:'#1a2332',color:'#94a3b8',border:'1px solid #2d3f53',padding:'7px 14px',fontSize:12,fontWeight:600}} onClick={()=>setViewTenant(t)}>👁 상세보기</button>
                 <button className="ab" style={{background:'#1d4ed822',color:'#93c5fd',border:'1px solid #1d4ed844',padding:'7px 14px',fontSize:12,fontWeight:600}} onClick={()=>{
                   if(!window.confirm(`${t.name}님을 재입주 처리하시겠어요?`))return;
                   syncTenants(tenants.map(x=>x.id===t.id?{...x,checkedOut:false}:x));
@@ -2130,6 +2164,87 @@ function App(){
         }
       </div>
     </div>}
+
+    {/* ═══ 모달: 입주자 상세보기 ═══ */}
+    {viewTenant&&(()=>{
+      const t=viewTenant;
+      const room=rooms.find(r=>r.id===t.roomId);
+      const ps=getPS(t);
+      const tHistory=payHistory.filter(h=>h.tenantId===t.id).sort((a,b)=>b.month.localeCompare(a.month));
+      const totalPaid=tHistory.reduce((s,h)=>s+h.amount,0);
+      const PM={'현금':'💵','카드':'💳','현금영수증':'🧾'};
+      return (
+        <div className="moov" onClick={()=>setViewTenant(null)}>
+          <div className="mobox" style={{maxWidth:520}} onClick={e=>e.stopPropagation()}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+              <div>
+                <div style={{fontSize:18,fontWeight:700,color:'#f1f5f9'}}>{t.name} <span style={{fontSize:13,color:t.gender==='여'?'#ec4899':'#3b82f6'}}>{t.gender||'남'}</span></div>
+                <div style={{fontSize:12,color:'#64748b'}}>{t.roomId}호 · {t.phone}</div>
+              </div>
+              <div style={{display:'flex',gap:7,alignItems:'center'}}>
+                <button className="ab" style={{background:'#1d4ed8',color:'#fff',padding:'7px 14px',fontSize:12,fontWeight:600}} onClick={()=>{setViewTenant(null);setMd({...t,payMethod:t.payMethod||'현금',depositRefunded:t.depositRefunded||false});setModal('editTenant');}}>✏️ 수정</button>
+                <button onClick={()=>setViewTenant(null)} style={{background:'none',border:'none',color:'#64748b',fontSize:24,cursor:'pointer',lineHeight:1}}>×</button>
+              </div>
+            </div>
+
+            {/* 기본 정보 */}
+            <div style={{background:'#0d1117',borderRadius:12,padding:'12px 14px',marginBottom:12}}>
+              <div style={{fontSize:11,fontWeight:700,color:'#64748b',marginBottom:9}}>기본 정보</div>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+                {[
+                  ['방 호수',`${t.roomId}호`],
+                  ['납부방법', `${PM[t.payMethod||'현금']||''} ${t.payMethod||'현금'}`],
+                  ['입주일', t.moveIn||'-'],
+                  ['만료일', t.moveOut||'미정'],
+                  ['월세', rentLabel(t,room)],
+                  ['납부일', `매월 ${t.payDay}일`],
+                  ['보증금', t.deposit>0?fmtW(t.deposit):'없음'],
+                  ['상태', t.checkedOut?'퇴실':ps.label],
+                ].map(([k,v])=>(
+                  <div key={k} style={{background:'#111827',borderRadius:8,padding:'8px 10px'}}>
+                    <div style={{fontSize:10,color:'#64748b',marginBottom:2}}>{k}</div>
+                    <div style={{fontSize:13,fontWeight:600,color:'#e2e8f0'}}>{v}</div>
+                  </div>
+                ))}
+              </div>
+              {t.memo&&<div style={{marginTop:8,padding:'7px 10px',background:'#111827',borderRadius:8}}>
+                <div style={{fontSize:10,color:'#64748b',marginBottom:1}}>메모</div>
+                <div style={{fontSize:13,color:'#94a3b8'}}>{t.memo}</div>
+              </div>}
+              {t.contractFile&&!t.contractFile.startsWith('blob:')&&<button className="ab" style={{marginTop:8,background:'#22c55e22',color:'#22c55e',border:'1px solid #22c55e33',padding:'7px 14px',fontSize:12,fontWeight:600,width:'100%'}} onClick={()=>{setViewTenant(null);setMd(t);setModal('viewContract');}}>📄 계약서 보기</button>}
+              {t.deposit>0&&t.checkedOut&&<div style={{marginTop:8,padding:'7px 10px',background:t.depositRefunded?'#22c55e11':'#ef444411',borderRadius:8,border:`1px solid ${t.depositRefunded?'#22c55e33':'#ef444433'}`}}>
+                <span style={{fontSize:12,fontWeight:600,color:t.depositRefunded?'#22c55e':'#ef4444'}}>💰 보증금 {fmtW(t.deposit)} — {t.depositRefunded?'환불 완료 ✓':'미환불 ⚠️'}</span>
+              </div>}
+            </div>
+
+            {/* 납부 이력 */}
+            <div style={{background:'#0d1117',borderRadius:12,padding:'12px 14px'}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:9}}>
+                <div style={{fontSize:11,fontWeight:700,color:'#64748b'}}>납부 이력 ({tHistory.length}건)</div>
+                {tHistory.length>0&&<div style={{fontSize:11,color:'#93c5fd',fontWeight:600}}>합계 {fmtW(totalPaid)}</div>}
+              </div>
+              {tHistory.length===0
+                ?<div style={{textAlign:'center',color:'#64748b',padding:'14px 0',fontSize:12}}>
+                    납부 완료 버튼을 누르면 이력이 기록돼요
+                  </div>
+                :tHistory.map(h=>(
+                  <div key={h.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'8px 0',borderBottom:'1px solid #1e2d3d'}}>
+                    <div style={{display:'flex',alignItems:'center',gap:8}}>
+                      <span style={{fontSize:16}}>{PM[h.method]||'💵'}</span>
+                      <div>
+                        <div style={{fontSize:13,fontWeight:600,color:'#e2e8f0'}}>{h.month}</div>
+                        <div style={{fontSize:11,color:'#64748b'}}>{h.date} · {h.method}</div>
+                      </div>
+                    </div>
+                    <div style={{fontSize:14,fontWeight:700,color:'#22c55e'}}>{fmtW(h.amount)}</div>
+                  </div>
+                ))
+              }
+            </div>
+          </div>
+        </div>
+      );
+    })()}
 
     {/* Toast */}
     {toast&&<div style={{position:'fixed',bottom:26,left:'50%',transform:'translateX(-50%)',background:toast.type==='success'?'#22c55e':'#ef4444',color:'#fff',padding:'12px 20px',borderRadius:40,fontWeight:600,fontSize:14,zIndex:9999,boxShadow:'0 8px 32px rgba(0,0,0,.5)',whiteSpace:'nowrap',pointerEvents:'none'}}>
